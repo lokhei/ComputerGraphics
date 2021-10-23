@@ -16,69 +16,6 @@
 #define WIDTH 320
 #define HEIGHT 240
 
-
-std :: vector<float> interpolateSingleFloats(float from, float to, int numberOfValues) {
-	float step = (to - from) / (numberOfValues -1);
-	std :: vector<float> v;
-	for (int i = 0; i < numberOfValues; i++){
-		v.push_back(from + i*step);
-	}
-	return v;
-}
-
-template <typename T>
-std::vector<CanvasPoint> interpolateRoundPoints(T from, T to, int numberOfValues) {
-	std::vector<CanvasPoint> points;
-	std :: vector<float> xs = interpolateSingleFloats(from.x, to.x, numberOfValues);
-	std :: vector<float> ys = interpolateSingleFloats(from.y, to.y, numberOfValues);
-	for (int i=0; i<numberOfValues; i++) {
-		points.push_back(CanvasPoint(round(xs[i]), round(ys[i])));
-	}
-	return points;
-}
-
-void sortTriangle(CanvasTriangle &triangle){
-	if (triangle[0].y > triangle[1].y) {
-		std::swap(triangle[0], triangle[1]);
-	}
-	if (triangle[1].y > triangle[2].y) {
-		std::swap(triangle[1], triangle[2]);
-		if (triangle[0].y > triangle[1].y) {
-			std::swap(triangle[0], triangle[1]);
-		}	
-	}
-}
-
-void drawLine(DrawingWindow &window, CanvasPoint from, CanvasPoint to, Colour colour) {
-	float numberOfSteps = std::max(abs(to.x - from.x), abs(to.y - from.y));
-	std :: vector<CanvasPoint> points = interpolateRoundPoints(from, to, numberOfSteps + 1);
-	for (int i=0; i<=numberOfSteps; i++) {
-		window.setPixelColour(points[i].x, points[i].y, (255 << 24) + (colour.red << 16) + (colour.green << 8) + colour.blue);
-	}
-}
-
-void drawStrokedTriangle(DrawingWindow &window, CanvasTriangle triangle, Colour colour) {
-	drawLine(window, triangle[0], triangle[1], colour);
-	drawLine(window, triangle[0], triangle[2], colour);
-	drawLine(window, triangle[1], triangle[2], colour);
-}
-
-void drawFilledTriangle(DrawingWindow &window, CanvasTriangle triangle, Colour colour, bool outline) {
-	sortTriangle(triangle);
-	std :: vector<CanvasPoint> start = interpolateRoundPoints(triangle[0], triangle[1], triangle[1].y - triangle[0].y + 1);
-	start.pop_back(); // Last row duplicated by next triangle so pop
-	std :: vector<CanvasPoint> start2 = interpolateRoundPoints(triangle[1], triangle[2], triangle[2].y - triangle[1].y + 1);
-	start.insert(start.end(), start2.begin(), start2.end());
-	std :: vector<CanvasPoint> end = interpolateRoundPoints(triangle[0], triangle[2], triangle[2].y - triangle[0].y + 1);
-
-	// Draw the filled in triangle
-	for (int i=0; i<=triangle[2].y - triangle[0].y; i++) {
-		drawLine(window, start[i], end[i], colour);
-	}
-
-	if (outline) drawStrokedTriangle(window, triangle, Colour(255,255,255)); //outline
-
-}
 std::unordered_map<std::string, Colour> loadMtlFile(const std::string &filename) {
 	std::unordered_map<std::string, Colour> colours;
 
@@ -109,8 +46,6 @@ std::vector<ModelTriangle> loadObjFile(const std::string &filename, float scale,
 	Colour colour;
 	while (std::getline(inputStr, nextLine)) { //extracts from inputStr and stores into nextLine
 		std::vector<std::string> vector = split(nextLine, ' '); //split line by spaces
-
-
 		if (vector[0] == "usemtl") {
 			colour = materials[vector[1]];
 		}else if (vector[0] == "v") {
@@ -129,34 +64,111 @@ std::vector<ModelTriangle> loadObjFile(const std::string &filename, float scale,
 			));
 		}
 	}
-
 	inputStr.close();
 	return faces;
 }
 
+std :: vector<float> interpolateSingleFloats(float from, float to, int numberOfValues) {
+	float step = (to - from) / (numberOfValues -1);
+	std :: vector<float> v;
+	for (int i = 0; i < numberOfValues; i++){
+		v.push_back(from + i*step);
+	}
+	return v;
+}
 
+template <typename T>
+std::vector<CanvasPoint> interpolateRoundPoints(T from, T to, int numberOfValues) {
+	std::vector<CanvasPoint> points;
+	std :: vector<float> xs = interpolateSingleFloats(from.x, to.x, numberOfValues);
+	std :: vector<float> ys = interpolateSingleFloats(from.y, to.y, numberOfValues);
+	std :: vector<float> depths = interpolateSingleFloats(from.depth, to.depth, numberOfValues);
+	for (int i=0; i<numberOfValues; i++) {
+		points.push_back(CanvasPoint(round(xs[i]), round(ys[i]),  depths[i]));
+	}
+	return points;
+}
+
+
+
+
+void sortTriangle(CanvasTriangle &triangle){
+	if (triangle[0].y > triangle[1].y) {
+		std::swap(triangle[0], triangle[1]);
+	}
+	if (triangle[1].y > triangle[2].y) {
+		std::swap(triangle[1], triangle[2]);
+		if (triangle[0].y > triangle[1].y) {
+			std::swap(triangle[0], triangle[1]);
+		}	
+	}
+}
+
+void drawLine(DrawingWindow &window, CanvasPoint from, CanvasPoint to, Colour colour, std::vector<float> &depthBuffer) {
+	float numberOfSteps = fmax(fmax(abs(to.x - from.x), abs(to.y - from.y)), 1);
+	std :: vector<CanvasPoint> points = interpolateRoundPoints(from, to, numberOfSteps + 1);
+	for (int i=0; i<=numberOfSteps; i++) {
+
+		int depthIndex = (points[i].y * window.width) + points[i].x;
+		float pointDepth = 1 / -points[i].depth;
+		if (pointDepth > depthBuffer[depthIndex]) {
+			depthBuffer[depthIndex] = pointDepth;
+			window.setPixelColour(points[i].x, points[i].y, (255 << 24) + (colour.red << 16) + (colour.green << 8) + colour.blue);
+		}
+	}
+}
+
+
+void drawStrokedTriangle(DrawingWindow &window, CanvasTriangle triangle, Colour colour, std::vector<float> &depthBuffer) {
+	drawLine(window, triangle[0], triangle[1], colour, depthBuffer);
+	drawLine(window, triangle[0], triangle[2], colour, depthBuffer);
+	drawLine(window, triangle[1], triangle[2], colour, depthBuffer);
+}
+
+void drawFilledTriangle(DrawingWindow &window, CanvasTriangle triangle, Colour colour, std::vector<float> &depthBuffer, bool outline) {
+	sortTriangle(triangle);
+	std :: vector<CanvasPoint> start = interpolateRoundPoints(triangle[0], triangle[1], triangle[1].y - triangle[0].y + 1);
+	if (triangle[2].y - triangle[1].y + 1 > 1){
+		start.pop_back(); // Last row duplicated by next triangle so pop
+		std :: vector<CanvasPoint> start2 = interpolateRoundPoints(triangle[1], triangle[2], triangle[2].y - triangle[1].y + 1);
+		start.insert(start.end(), start2.begin(), start2.end());
+	}
+	
+	std :: vector<CanvasPoint> end = interpolateRoundPoints(triangle[0], triangle[2], triangle[2].y - triangle[0].y + 1);
+
+	// Draw the filled in triangle
+	for (int i=0; i<=triangle[2].y - triangle[0].y; i++) {
+		drawLine(window, start[i], end[i], colour, depthBuffer);
+	}
+
+	if (outline) drawStrokedTriangle(window, triangle, Colour(255,255,255), depthBuffer); //outline
+
+}
 
 
 CanvasPoint getCanvasIntersectionPoint(DrawingWindow &window, glm::vec3 cameraPosition,glm::vec3 vertexPosition, float focalLength){
 
-	int planeMultiplier = 100;
+	int planeMultiplier = 450;
 	glm::vec3 vertex = vertexPosition - cameraPosition;
-	float u = round(-planeMultiplier*focalLength * (vertex.x / vertex.z)) + (window.width / 2);
+	float u = -round(planeMultiplier*focalLength * (vertex.x / vertex.z)) + (window.width / 2);
 	float v = round(planeMultiplier*focalLength * (vertex.y / vertex.z)) + (window.height / 2);
+	float z = vertex.z;
 
-	return CanvasPoint(u,v);
+	return CanvasPoint(u,v,z);
 }
 
 void pointcloud(DrawingWindow &window, glm::vec3 cameraPosition, std::vector<ModelTriangle> faces, float focalLength) {
 	window.clearPixels();
+	std::vector<float> depthBuffer = std::vector<float>(window.height * window.width, 0);
 
 	for (int i=0; i<faces.size(); i++) {
+		ModelTriangle face = faces[i];
 		CanvasTriangle triangle = CanvasTriangle();
-		for (int j=0; j<faces[i].vertices.size(); j++) {
-			glm::vec3 vertexPosition = faces[i].vertices[j];
+		for (int j=0; j<face.vertices.size(); j++) {
+			glm::vec3 vertexPosition = face.vertices[j];
 			triangle.vertices[j] = getCanvasIntersectionPoint(window,cameraPosition, vertexPosition, focalLength );
 		}
-		drawFilledTriangle(window, triangle, faces[i].colour, false);
+		drawFilledTriangle(window, triangle, faces[i].colour, depthBuffer, false);
 	}
 	
 }
@@ -177,7 +189,7 @@ int main(int argc, char *argv[]) {
 	DrawingWindow window = DrawingWindow(WIDTH, HEIGHT, false);
 	SDL_Event event;
 	
-	float vertexScale = 0.5;
+	float vertexScale = 0.17;
 
 	std::unordered_map<std::string, Colour> materials = loadMtlFile("cornell-box.mtl");
 
@@ -186,8 +198,10 @@ int main(int argc, char *argv[]) {
 	float focalLength = 2.0;
 
 	while (true) {
-		if (window.pollForInputEvents(event)) handleEvent(event, window);
-		pointcloud(window, cameraPosition, faces, focalLength);
+		if (window.pollForInputEvents(event)){
+			handleEvent(event, window);
+			pointcloud(window, cameraPosition, faces, focalLength);
+		}
 		window.renderFrame();
 	}
 }
