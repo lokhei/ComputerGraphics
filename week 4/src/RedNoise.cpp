@@ -104,28 +104,28 @@ void sortTriangle(CanvasTriangle &triangle){
 	}
 }
 
-void drawLine(DrawingWindow &window, CanvasPoint from, CanvasPoint to, Colour colour, std::vector<float> &depthBuffer) {
+void drawLine(DrawingWindow &window, CanvasPoint from, CanvasPoint to, Colour colour, std::vector<std::vector<float>> &depthBuffer) {
 	float numberOfSteps = fmax(fmax(abs(to.x - from.x), abs(to.y - from.y)), 1);
 	std :: vector<CanvasPoint> points = interpolateRoundPoints(from, to, numberOfSteps + 1);
 	for (int i=0; i<=numberOfSteps; i++) {
 
-		int depthIndex = (points[i].y * window.width) + points[i].x;
-		float pointDepth = 1 / -points[i].depth;
-		if (pointDepth > depthBuffer[depthIndex]) {
-			depthBuffer[depthIndex] = pointDepth;
+		// int depthIndex = (points[i].y * window.width) + points[i].x;
+		float pointDepth = 1 / -points[i].depth;	
+		if (pointDepth > depthBuffer[round(points[i].y)][round(points[i].x)]) {
+			depthBuffer[round(points[i].y)][round(points[i].x)] = pointDepth;
 			window.setPixelColour(points[i].x, points[i].y, (255 << 24) + (colour.red << 16) + (colour.green << 8) + colour.blue);
 		}
 	}
 }
 
 
-void drawStrokedTriangle(DrawingWindow &window, CanvasTriangle triangle, Colour colour, std::vector<float> &depthBuffer) {
+void drawStrokedTriangle(DrawingWindow &window, CanvasTriangle triangle, Colour colour, std::vector<std::vector<float>> &depthBuffer) {
 	drawLine(window, triangle[0], triangle[1], colour, depthBuffer);
 	drawLine(window, triangle[0], triangle[2], colour, depthBuffer);
 	drawLine(window, triangle[1], triangle[2], colour, depthBuffer);
 }
 
-void drawFilledTriangle(DrawingWindow &window, CanvasTriangle triangle, Colour colour, std::vector<float> &depthBuffer, bool outline) {
+void drawFilledTriangle(DrawingWindow &window, CanvasTriangle triangle, Colour colour, std::vector<std::vector<float>> &depthBuffer, bool outline) {
 	sortTriangle(triangle);
 	std :: vector<CanvasPoint> start = interpolateRoundPoints(triangle[0], triangle[1], triangle[1].y - triangle[0].y + 1);
 	if (triangle[2].y - triangle[1].y + 1 > 1){
@@ -157,9 +157,9 @@ CanvasPoint getCanvasIntersectionPoint(DrawingWindow &window, glm::vec3 cameraPo
 	return CanvasPoint(u,v,z);
 }
 
-void pointcloud(DrawingWindow &window, glm::vec3 cameraPosition, std::vector<ModelTriangle> faces, float focalLength) {
+void drawObj(DrawingWindow &window, glm::vec3 cameraPosition, std::vector<ModelTriangle> faces, float focalLength) {
 	window.clearPixels();
-	std::vector<float> depthBuffer = std::vector<float>(window.height * window.width, 0);
+	std::vector<std::vector<float>> depthBuffer (window.height, std::vector<float>(window.width, 0));
 
 	for (int i=0; i<faces.size(); i++) {
 		ModelTriangle face = faces[i];
@@ -200,7 +200,7 @@ int main(int argc, char *argv[]) {
 	while (true) {
 		if (window.pollForInputEvents(event)){
 			handleEvent(event, window);
-			pointcloud(window, cameraPosition, faces, focalLength);
+			drawObj(window, cameraPosition, faces, focalLength);
 		}
 		window.renderFrame();
 	}
