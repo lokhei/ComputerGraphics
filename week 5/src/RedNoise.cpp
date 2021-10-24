@@ -128,13 +128,17 @@ void sortTriangle(CanvasTriangle &triangle){
 }
 
 void drawLine(DrawingWindow &window, CanvasPoint from, CanvasPoint to, Colour colour, std::vector<std::vector<float>> &depthBuffer) {
-	float numberOfSteps = fmax(fmax(abs(to.x - from.x), abs(to.y - from.y)), 1);
+	float numberOfSteps = std::max(std::max(abs(to.x - from.x), abs(to.y - from.y)), 1.0f);
 	std :: vector<CanvasPoint> points = interpolateRoundPoints(from, to, numberOfSteps + 1);
 	for (int i=0; i<=numberOfSteps; i++) {
-		float pointDepth = 1 / -points[i].depth;	
-		if (pointDepth > depthBuffer[round(points[i].y)][round(points[i].x)]) {
-			depthBuffer[round(points[i].y)][round(points[i].x)] = pointDepth;
-			window.setPixelColour(points[i].x, points[i].y, (255 << 24) + (colour.red << 16) + (colour.green << 8) + colour.blue);
+		int x = points[i].x;
+		int y = points[i].y;
+		if(x >= 0 && x < window.width && y >= 0 && y < window.height) {
+			float pointDepth = 1 / -points[i].depth;	
+			if (pointDepth > depthBuffer[y][x]) {
+				depthBuffer[y][x] = pointDepth;
+				window.setPixelColour(x, y, (255 << 24) + (colour.red << 16) + (colour.green << 8) + colour.blue);
+			}
 		}
 	}
 }
@@ -187,17 +191,22 @@ void drawTexturedTriangle(DrawingWindow &window, CanvasTriangle triangle, Textur
 		float numberOfSteps = abs(xStart[i].x - xEnd[i].x);
 		//interpolate between start and end of rake to find texture point for pixel
 		std :: vector<CanvasPoint> texPoints = interpolateRoundPoints(textureStarts[i], textureEnds[i], numberOfSteps + 1);
-
 		std :: vector<CanvasPoint> points = interpolateRoundPoints(xStart[i], xEnd[i], numberOfSteps + 1);
 
-		for (float i=0.0; i <= numberOfSteps; i++) {
-			uint32_t col = texMap.pixels[(round(texPoints[i].y) * texMap.width) + round(texPoints[i].x)];
-			window.setPixelColour(points[i].x, points[i].y, col);
+		for (float j=0.0; j <= numberOfSteps; j++) {
+			int x = points[j].x;
+			int y = points[j].y;
+			if(x >= 0 && x < window.width && y >= 0 && y < window.height) {
+				float pointDepth = 1 / -points[i].depth;	
+				if (pointDepth > depthBuffer[y][x]) {
+					depthBuffer[y][x] = pointDepth;
+					uint32_t col = texMap.pixels[texPoints[j].y * texMap.width + texPoints[j].x];
+					window.setPixelColour(points[j].x, points[j].y, col);
+				}
+			}
 		}
-
 	}
-	
-	
+
 	if (outline) drawStrokedTriangle(window, triangle, Colour(255, 255, 255), depthBuffer);
 }
 
@@ -205,7 +214,7 @@ void drawTexturedTriangle(DrawingWindow &window, CanvasTriangle triangle, Textur
 
 CanvasPoint getCanvasIntersectionPoint(DrawingWindow &window, glm::vec3 cameraPosition,glm::vec3 vertexPosition, float focalLength){
 
-	int planeMultiplier = 900;
+	int planeMultiplier = 600;
 	glm::vec3 vertex = vertexPosition - cameraPosition;
 	float u = -round(planeMultiplier*focalLength * (vertex.x / vertex.z)) + (window.width / 2);
 	float v = round(planeMultiplier*focalLength * (vertex.y / vertex.z)) + (window.height / 2);
@@ -244,12 +253,15 @@ void drawObj(DrawingWindow &window, glm::vec3 cameraPosition, std::vector<ModelT
 	
 }
 
-void handleEvent(SDL_Event event, DrawingWindow &window) {
+void handleEvent(SDL_Event event, DrawingWindow &window, glm::vec3 &camera) {
 	if (event.type == SDL_KEYDOWN) {
-		if (event.key.keysym.sym == SDLK_LEFT) std::cout << "LEFT" << std::endl;
-		else if (event.key.keysym.sym == SDLK_RIGHT) std::cout << "RIGHT" << std::endl;
-		else if (event.key.keysym.sym == SDLK_UP) std::cout << "UP" << std::endl;
-		else if (event.key.keysym.sym == SDLK_DOWN) std::cout << "DOWN" << std::endl;
+		if (event.key.keysym.sym == SDLK_UP) camera.y += 0.1;
+		if (event.key.keysym.sym == SDLK_DOWN) camera.y -= 0.1;
+
+		else if (event.key.keysym.sym == SDLK_w) camera.z -= 0.1;
+		else if (event.key.keysym.sym == SDLK_a) camera.x -= 0.1;
+		else if (event.key.keysym.sym == SDLK_s) camera.z += 0.1;
+		else if (event.key.keysym.sym == SDLK_d) camera.x += 0.1;
 	} else if (event.type == SDL_MOUSEBUTTONDOWN) {
 		window.savePPM("output.ppm");
 		window.saveBMP("output.bmp");
@@ -270,7 +282,7 @@ int main(int argc, char *argv[]) {
 
 	while (true) {
 		if (window.pollForInputEvents(event)){
-			handleEvent(event, window);
+			handleEvent(event, window, cameraPosition);
 			drawObj(window, cameraPosition, faces, focalLength, textureMap);
 		}
 		window.renderFrame();
