@@ -113,9 +113,9 @@ void drawTexturedTriangle(DrawingWindow &window, CanvasTriangle triangle, Textur
 
 		std :: vector<CanvasPoint> points = interpolateRoundPoints(xStart[i], xEnd[i], numberOfSteps + 1);
 
-		for (float i=0.0; i<=numberOfSteps; i++) {
-			uint32_t col = texMap.pixels[(round(texPoints[i].y) * texMap.width) + round(texPoints[i].x)];
-			window.setPixelColour(points[i].x, points[i].y, col);
+		for (float j=0.0; j<=numberOfSteps; j++) {
+			uint32_t col = texMap.pixels[(round(texPoints[j].y) * texMap.width) + round(texPoints[j].x)];
+			window.setPixelColour(points[j].x, points[j].y, col);
 		}
 
 	}
