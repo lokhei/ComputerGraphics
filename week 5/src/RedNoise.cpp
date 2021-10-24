@@ -253,15 +253,42 @@ void drawObj(DrawingWindow &window, glm::vec3 cameraPosition, std::vector<ModelT
 	
 }
 
+void rotateY(glm::vec3 &cam, float angle) {
+	glm::mat3 rotationMatrix = glm::mat3(
+		cos(angle), 0.0, -sin(angle),
+		0.0, 1.0, 0.0,
+		sin(angle), 0.0, cos(angle)
+	);
+	cam = rotationMatrix * cam;
+}
+
+
+void rotateX(glm::vec3 &cam, float angle) {
+	glm::mat3 rotationMatrix = glm::mat3(
+		1.0, 0.0, 0.0,
+		0.0, cos(angle), sin(angle),
+		0.0, -sin(angle), cos(angle)
+	);
+	cam = rotationMatrix * cam;
+}
+
+
 void handleEvent(SDL_Event event, DrawingWindow &window, glm::vec3 &camera) {
 	if (event.type == SDL_KEYDOWN) {
-		if (event.key.keysym.sym == SDLK_UP) camera.y += 0.1;
-		if (event.key.keysym.sym == SDLK_DOWN) camera.y -= 0.1;
+		//camera movement
+		if (event.key.keysym.sym == SDLK_e) camera.y += 0.1; //up
+		else if (event.key.keysym.sym == SDLK_q) camera.y -= 0.1; //down
+		else if (event.key.keysym.sym == SDLK_w) camera.z -= 0.1; //forwards
+		else if (event.key.keysym.sym == SDLK_s) camera.z += 0.1; //backwards
+		else if (event.key.keysym.sym == SDLK_d) camera.x += 0.1; //right
+		else if (event.key.keysym.sym == SDLK_a) camera.x -= 0.1; //left
+		//rotation
+		else if (event.key.keysym.sym == SDLK_UP) rotateY(camera, 0.1); //rotate Y C
+		else if (event.key.keysym.sym == SDLK_RIGHT) rotateX(camera, 0.1); //rotate X C
+		else if (event.key.keysym.sym == SDLK_DOWN) rotateY(camera, -0.1); //rotate Y antiC
+		else if (event.key.keysym.sym == SDLK_LEFT) rotateX(camera, -0.1); //rotate X antiC
 
-		else if (event.key.keysym.sym == SDLK_w) camera.z -= 0.1;
-		else if (event.key.keysym.sym == SDLK_a) camera.x -= 0.1;
-		else if (event.key.keysym.sym == SDLK_s) camera.z += 0.1;
-		else if (event.key.keysym.sym == SDLK_d) camera.x += 0.1;
+
 	} else if (event.type == SDL_MOUSEBUTTONDOWN) {
 		window.savePPM("output.ppm");
 		window.saveBMP("output.bmp");
