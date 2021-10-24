@@ -212,10 +212,10 @@ void drawTexturedTriangle(DrawingWindow &window, CanvasTriangle triangle, Textur
 
 
 
-CanvasPoint getCanvasIntersectionPoint(DrawingWindow &window, glm::vec3 cameraPosition,glm::vec3 vertexPosition, float focalLength){
+CanvasPoint getCanvasIntersectionPoint(DrawingWindow &window, glm::vec3 cameraPosition, glm::mat3 camOrientation, glm::vec3 vertexPosition, float focalLength){
 
 	int planeMultiplier = 600;
-	glm::vec3 vertex = vertexPosition - cameraPosition;
+	glm::vec3 vertex = (vertexPosition - cameraPosition) * camOrientation;
 	float u = -round(planeMultiplier*focalLength * (vertex.x / vertex.z)) + (window.width / 2);
 	float v = round(planeMultiplier*focalLength * (vertex.y / vertex.z)) + (window.height / 2);
 	float z = vertex.z;
@@ -223,7 +223,7 @@ CanvasPoint getCanvasIntersectionPoint(DrawingWindow &window, glm::vec3 cameraPo
 	return CanvasPoint(u,v,z);
 }
 
-void drawObj(DrawingWindow &window, glm::vec3 cameraPosition, std::vector<ModelTriangle> faces, float focalLength, TextureMap textureMap) {
+void drawObj(DrawingWindow &window, glm::vec3 cameraPosition, glm::mat3 camOrientation, std::vector<ModelTriangle> faces, float focalLength, TextureMap textureMap) {
 	window.clearPixels();
 	std::vector<std::vector<float>> depthBuffer (window.height, std::vector<float>(window.width, 0));
 
@@ -232,7 +232,7 @@ void drawObj(DrawingWindow &window, glm::vec3 cameraPosition, std::vector<ModelT
 		CanvasTriangle triangle = CanvasTriangle();
 		for (int j=0; j<face.vertices.size(); j++) {
 			glm::vec3 vertexPosition = face.vertices[j];
-			triangle.vertices[j] = getCanvasIntersectionPoint(window,cameraPosition, vertexPosition, focalLength );
+			triangle.vertices[j] = getCanvasIntersectionPoint(window,cameraPosition,camOrientation, vertexPosition, focalLength );
 			triangle.vertices[j].texturePoint = face.texturePoints[j];
 		}
 
@@ -253,40 +253,46 @@ void drawObj(DrawingWindow &window, glm::vec3 cameraPosition, std::vector<ModelT
 	
 }
 
-void rotateY(glm::vec3 &cam, float angle) {
+template <typename T>
+void rotateY(T &camera, float angle) {
 	glm::mat3 rotationMatrix = glm::mat3(
 		cos(angle), 0.0, -sin(angle),
 		0.0, 1.0, 0.0,
 		sin(angle), 0.0, cos(angle)
 	);
-	cam = rotationMatrix * cam;
+	camera = rotationMatrix * camera;
 }
 
-
-void rotateX(glm::vec3 &cam, float angle) {
+template <typename T>
+void rotateX(T &camera, float angle) {
 	glm::mat3 rotationMatrix = glm::mat3(
 		1.0, 0.0, 0.0,
 		0.0, cos(angle), sin(angle),
 		0.0, -sin(angle), cos(angle)
 	);
-	cam = rotationMatrix * cam;
+	camera = rotationMatrix * camera;
 }
 
 
-void handleEvent(SDL_Event event, DrawingWindow &window, glm::vec3 &camera) {
+void handleEvent(SDL_Event event, DrawingWindow &window, glm::vec3 &camPos, glm::mat3 &camOri) {
 	if (event.type == SDL_KEYDOWN) {
 		//camera movement
-		if (event.key.keysym.sym == SDLK_e) camera.y += 0.1; //up
-		else if (event.key.keysym.sym == SDLK_q) camera.y -= 0.1; //down
-		else if (event.key.keysym.sym == SDLK_w) camera.z -= 0.1; //forwards
-		else if (event.key.keysym.sym == SDLK_s) camera.z += 0.1; //backwards
-		else if (event.key.keysym.sym == SDLK_d) camera.x += 0.1; //right
-		else if (event.key.keysym.sym == SDLK_a) camera.x -= 0.1; //left
+		if (event.key.keysym.sym == SDLK_e) camPos.y += 0.1; //up
+		else if (event.key.keysym.sym == SDLK_q) camPos.y -= 0.1; //down
+		else if (event.key.keysym.sym == SDLK_w) camPos.z -= 0.1; //forwards
+		else if (event.key.keysym.sym == SDLK_s) camPos.z += 0.1; //backwards
+		else if (event.key.keysym.sym == SDLK_d) camPos.x += 0.1; //right
+		else if (event.key.keysym.sym == SDLK_a) camPos.x -= 0.1; //left
 		//rotation
-		else if (event.key.keysym.sym == SDLK_UP) rotateY(camera, 0.1); //rotate Y C
-		else if (event.key.keysym.sym == SDLK_RIGHT) rotateX(camera, 0.1); //rotate X C
-		else if (event.key.keysym.sym == SDLK_DOWN) rotateY(camera, -0.1); //rotate Y antiC
-		else if (event.key.keysym.sym == SDLK_LEFT) rotateX(camera, -0.1); //rotate X antiC
+		else if (event.key.keysym.sym == SDLK_UP) rotateY(camPos, 0.1); //rotate Y C
+		else if (event.key.keysym.sym == SDLK_RIGHT) rotateX(camPos, 0.1); //rotate X C
+		else if (event.key.keysym.sym == SDLK_DOWN) rotateY(camPos, -0.1); //rotate Y antiC
+		else if (event.key.keysym.sym == SDLK_LEFT) rotateX(camPos, -0.1); //rotate X antiC
+		//orientation
+		else if (event.key.keysym.sym == SDLK_i) rotateY(camOri, 0.1); //panning
+		else if (event.key.keysym.sym == SDLK_k) rotateY(camOri, -0.1);
+		else if (event.key.keysym.sym == SDLK_l) rotateX(camOri, 0.1); //tilting
+		else if (event.key.keysym.sym == SDLK_j) rotateX(camOri, -0.1);
 
 
 	} else if (event.type == SDL_MOUSEBUTTONDOWN) {
@@ -307,10 +313,16 @@ int main(int argc, char *argv[]) {
 	glm::vec3 cameraPosition = glm::vec3(0.0, 0.0, 4.0);
 	float focalLength = 2.0;
 
+	glm::mat3 camOrientation(
+		1.0, 0.0, 0.0,
+		0.0, 1.0, 0.0,
+		0.0, 0.0, 1.0
+		);
+
 	while (true) {
 		if (window.pollForInputEvents(event)){
-			handleEvent(event, window, cameraPosition);
-			drawObj(window, cameraPosition, faces, focalLength, textureMap);
+			handleEvent(event, window, cameraPosition, camOrientation);
+			drawObj(window, cameraPosition, camOrientation, faces, focalLength, textureMap);
 		}
 		window.renderFrame();
 	}
