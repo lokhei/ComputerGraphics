@@ -13,6 +13,7 @@
 #include <Utils.h>
 #include <unordered_map>
 
+
 #define WIDTH 640
 #define HEIGHT 480
 
@@ -175,7 +176,7 @@ void drawFilledTriangle(DrawingWindow &window, CanvasTriangle triangle, Colour c
 		drawLine(window, start[i], end[i], colour, depthBuffer);
 	}
 
-	if (outline) drawStrokedTriangle(window, triangle, Colour(255,255,255), depthBuffer); //outline
+	if (outline) drawStrokedTriangle(window, triangle, colour, depthBuffer); //outline
 
 }
 
@@ -233,24 +234,20 @@ CanvasPoint getCanvasIntersectionPoint(DrawingWindow &window, glm::vec3 vertexPo
 }
 
 
-template <typename T>
-void rotateY(T &camera, float angle) {
-	glm::mat3 rotationMatrix = glm::mat3(
+glm::mat3 rotateY(float angle) {
+	return glm::mat3(
 		cos(angle), 0.0, -sin(angle),
 		0.0, 1.0, 0.0,
 		sin(angle), 0.0, cos(angle)
 	);
-	camera = rotationMatrix * camera;
 }
 
-template <typename T>
-void rotateX(T &camera, float angle) {
-	glm::mat3 rotationMatrix = glm::mat3(
+glm::mat3 rotateX(float angle) {
+	return glm::mat3(
 		1.0, 0.0, 0.0,
 		0.0, cos(angle), sin(angle),
 		0.0, -sin(angle), cos(angle)
 	);
-	camera = rotationMatrix * camera;
 }	
 
 
@@ -265,7 +262,7 @@ void lookAt( glm::vec3 lookAtPoint) {
 
 void orbit(bool orb){ 
 	if (orb){
-		rotateY(camPos, -0.1);
+		camPos = camPos * rotateY(-0.1);
 		lookAt(glm::vec3(0, 0, 0));
 	}	
 }
@@ -295,7 +292,7 @@ void draw(DrawingWindow &window, std::vector<ModelTriangle> faces, float focalLe
 			drawTexturedTriangle(window, triangle, textureMap, depthBuffer, false);
 		}
 		else {
-			drawFilledTriangle(window, triangle, faces[i].colour, depthBuffer, false);
+			drawFilledTriangle(window, triangle, faces[i].colour, depthBuffer, true);
 		}
 	}
 	
@@ -314,15 +311,15 @@ void handleEvent(SDL_Event event, DrawingWindow &window) {
 		else if (event.key.keysym.sym == SDLK_d) camPos.x += 0.1; //right
 		else if (event.key.keysym.sym == SDLK_a) camPos.x -= 0.1; //left
 		//rotation
-		else if (event.key.keysym.sym == SDLK_UP) rotateY(camPos, 0.1); //rotate Y C
-		else if (event.key.keysym.sym == SDLK_RIGHT) rotateX(camPos, 0.1); //rotate X C
-		else if (event.key.keysym.sym == SDLK_DOWN) rotateY(camPos, -0.1); //rotate Y antiC
-		else if (event.key.keysym.sym == SDLK_LEFT) rotateX(camPos, -0.1); //rotate X antiC
+		else if (event.key.keysym.sym == SDLK_UP) camPos = camPos * rotateY(0.1); //rotate Y C
+		else if (event.key.keysym.sym == SDLK_RIGHT) camPos = camPos * rotateX(0.1); //rotate X C
+		else if (event.key.keysym.sym == SDLK_DOWN) camPos = camPos * rotateY(-0.1); //rotate Y antiC
+		else if (event.key.keysym.sym == SDLK_LEFT) camPos = camPos * rotateX(-0.1); //rotate X antiC
 		//orientation
-		else if (event.key.keysym.sym == SDLK_i) rotateY(camOrientation, 0.1); //panning
-		else if (event.key.keysym.sym == SDLK_k) rotateY(camOrientation, -0.1);
-		else if (event.key.keysym.sym == SDLK_l) rotateX(camOrientation, 0.1); //tilting
-		else if (event.key.keysym.sym == SDLK_j) rotateX(camOrientation, -0.1);
+		else if (event.key.keysym.sym == SDLK_i) camOrientation = camOrientation * rotateY(0.1); //panning
+		else if (event.key.keysym.sym == SDLK_k) camOrientation = camOrientation * rotateY(-0.1);
+		else if (event.key.keysym.sym == SDLK_l) camOrientation = camOrientation * rotateX(0.1); //tilting
+		else if (event.key.keysym.sym == SDLK_j) camOrientation = camOrientation * rotateX(-0.1);
 
 		//orbit
 		else if (event.key.keysym.sym == SDLK_o) orbiting = (orbiting) ? false : true;
