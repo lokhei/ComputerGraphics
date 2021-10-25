@@ -16,6 +16,15 @@
 #define WIDTH 640
 #define HEIGHT 480
 
+bool orbiting = false;
+
+glm::vec3 camPos(0.0, 0.0, 4.0);
+glm::mat3 camOrientation(
+	glm::vec3(1.0,0.0,0.0),
+	glm::vec3(0.0,1.0,0.0),
+	glm::vec3(0.0,0.0,1.0)
+);
+
 std::unordered_map<std::string, Colour> loadMtlFile(const std::string &filename) {
 	std::unordered_map<std::string, Colour> colours;
 
@@ -130,12 +139,12 @@ void sortTriangle(CanvasTriangle &triangle){
 void drawLine(DrawingWindow &window, CanvasPoint from, CanvasPoint to, Colour colour, std::vector<std::vector<float>> &depthBuffer) {
 	float numberOfSteps = std::max(std::max(abs(to.x - from.x), abs(to.y - from.y)), 1.0f);
 	std :: vector<CanvasPoint> points = interpolateRoundPoints(from, to, numberOfSteps + 1);
-	for (int i=0; i<=numberOfSteps; i++) {
+	for (int i=0; i<numberOfSteps; i++) {
 		int x = points[i].x;
 		int y = points[i].y;
 		if(x >= 0 && x < window.width && y >= 0 && y < window.height) {
 			float pointDepth = 1 / -points[i].depth;	
-			if (pointDepth > depthBuffer[y][x]) {
+			if (pointDepth >= depthBuffer[y][x]) {
 				depthBuffer[y][x] = pointDepth;
 				window.setPixelColour(x, y, (255 << 24) + (colour.red << 16) + (colour.green << 8) + colour.blue);
 			}
@@ -212,10 +221,10 @@ void drawTexturedTriangle(DrawingWindow &window, CanvasTriangle triangle, Textur
 
 
 
-CanvasPoint getCanvasIntersectionPoint(DrawingWindow &window, glm::vec3 cameraPosition, glm::mat3 camOrientation, glm::vec3 vertexPosition, float focalLength){
+CanvasPoint getCanvasIntersectionPoint(DrawingWindow &window, glm::vec3 vertexPosition, float focalLength){
 
 	int planeMultiplier = 600;
-	glm::vec3 vertex = (vertexPosition - cameraPosition) * camOrientation;
+	glm::vec3 vertex = (vertexPosition - camPos) * camOrientation;
 	float u = -round(planeMultiplier*focalLength * (vertex.x / vertex.z)) + (window.width / 2);
 	float v = round(planeMultiplier*focalLength * (vertex.y / vertex.z)) + (window.height / 2);
 	float z = vertex.z;
@@ -223,8 +232,47 @@ CanvasPoint getCanvasIntersectionPoint(DrawingWindow &window, glm::vec3 cameraPo
 	return CanvasPoint(u,v,z);
 }
 
-void drawObj(DrawingWindow &window, glm::vec3 cameraPosition, glm::mat3 camOrientation, std::vector<ModelTriangle> faces, float focalLength, TextureMap textureMap) {
+
+template <typename T>
+void rotateY(T &camera, float angle) {
+	glm::mat3 rotationMatrix = glm::mat3(
+		cos(angle), 0.0, -sin(angle),
+		0.0, 1.0, 0.0,
+		sin(angle), 0.0, cos(angle)
+	);
+	camera = rotationMatrix * camera;
+}
+
+template <typename T>
+void rotateX(T &camera, float angle) {
+	glm::mat3 rotationMatrix = glm::mat3(
+		1.0, 0.0, 0.0,
+		0.0, cos(angle), sin(angle),
+		0.0, -sin(angle), cos(angle)
+	);
+	camera = rotationMatrix * camera;
+}	
+
+
+
+void lookAt( glm::vec3 lookAtPoint) {
+	glm::vec3 forward = glm::normalize(camPos - lookAtPoint);
+	glm::vec3 right = glm::normalize(glm::cross(glm::vec3(0, 1, 0), forward));
+	glm::vec3 up = glm::normalize(glm::cross(forward, right));
+	camOrientation =  glm::mat3(right, up, forward);
+}
+
+
+void orbit(bool orb){ 
+	if (orb){
+		rotateY(camPos, -0.1);
+		lookAt(glm::vec3(0, 0, 0));
+	}	
+}
+
+void draw(DrawingWindow &window, std::vector<ModelTriangle> faces, float focalLength, TextureMap textureMap) {
 	window.clearPixels();
+	orbit(orbiting); 
 	std::vector<std::vector<float>> depthBuffer (window.height, std::vector<float>(window.width, 0));
 
 	for (int i=0; i<faces.size(); i++) {
@@ -232,7 +280,7 @@ void drawObj(DrawingWindow &window, glm::vec3 cameraPosition, glm::mat3 camOrien
 		CanvasTriangle triangle = CanvasTriangle();
 		for (int j=0; j<face.vertices.size(); j++) {
 			glm::vec3 vertexPosition = face.vertices[j];
-			triangle.vertices[j] = getCanvasIntersectionPoint(window,cameraPosition,camOrientation, vertexPosition, focalLength );
+			triangle.vertices[j] = getCanvasIntersectionPoint(window,vertexPosition,focalLength );
 			triangle.vertices[j].texturePoint = face.texturePoints[j];
 		}
 
@@ -253,28 +301,10 @@ void drawObj(DrawingWindow &window, glm::vec3 cameraPosition, glm::mat3 camOrien
 	
 }
 
-template <typename T>
-void rotateY(T &camera, float angle) {
-	glm::mat3 rotationMatrix = glm::mat3(
-		cos(angle), 0.0, -sin(angle),
-		0.0, 1.0, 0.0,
-		sin(angle), 0.0, cos(angle)
-	);
-	camera = rotationMatrix * camera;
-}
-
-template <typename T>
-void rotateX(T &camera, float angle) {
-	glm::mat3 rotationMatrix = glm::mat3(
-		1.0, 0.0, 0.0,
-		0.0, cos(angle), sin(angle),
-		0.0, -sin(angle), cos(angle)
-	);
-	camera = rotationMatrix * camera;
-}
 
 
-void handleEvent(SDL_Event event, DrawingWindow &window, glm::vec3 &camPos, glm::mat3 &camOri) {
+
+void handleEvent(SDL_Event event, DrawingWindow &window) {
 	if (event.type == SDL_KEYDOWN) {
 		//camera movement
 		if (event.key.keysym.sym == SDLK_e) camPos.y += 0.1; //up
@@ -289,11 +319,13 @@ void handleEvent(SDL_Event event, DrawingWindow &window, glm::vec3 &camPos, glm:
 		else if (event.key.keysym.sym == SDLK_DOWN) rotateY(camPos, -0.1); //rotate Y antiC
 		else if (event.key.keysym.sym == SDLK_LEFT) rotateX(camPos, -0.1); //rotate X antiC
 		//orientation
-		else if (event.key.keysym.sym == SDLK_i) rotateY(camOri, 0.1); //panning
-		else if (event.key.keysym.sym == SDLK_k) rotateY(camOri, -0.1);
-		else if (event.key.keysym.sym == SDLK_l) rotateX(camOri, 0.1); //tilting
-		else if (event.key.keysym.sym == SDLK_j) rotateX(camOri, -0.1);
+		else if (event.key.keysym.sym == SDLK_i) rotateY(camOrientation, 0.1); //panning
+		else if (event.key.keysym.sym == SDLK_k) rotateY(camOrientation, -0.1);
+		else if (event.key.keysym.sym == SDLK_l) rotateX(camOrientation, 0.1); //tilting
+		else if (event.key.keysym.sym == SDLK_j) rotateX(camOrientation, -0.1);
 
+		//orbit
+		else if (event.key.keysym.sym == SDLK_o) orbiting = (orbiting) ? false : true;
 
 	} else if (event.type == SDL_MOUSEBUTTONDOWN) {
 		window.savePPM("output.ppm");
@@ -310,20 +342,14 @@ int main(int argc, char *argv[]) {
 	float vertexScale = 0.17;
 	
 	std::vector<ModelTriangle> faces = loadObjFile("textured-cornell-box.obj", vertexScale);
-	glm::vec3 cameraPosition = glm::vec3(0.0, 0.0, 4.0);
 	float focalLength = 2.0;
-
-	glm::mat3 camOrientation(
-		1.0, 0.0, 0.0,
-		0.0, 1.0, 0.0,
-		0.0, 0.0, 1.0
-		);
 
 	while (true) {
 		if (window.pollForInputEvents(event)){
-			handleEvent(event, window, cameraPosition, camOrientation);
-			drawObj(window, cameraPosition, camOrientation, faces, focalLength, textureMap);
+			handleEvent(event, window);
 		}
+		draw(window, faces, focalLength, textureMap);
+
 		window.renderFrame();
 	}
 }
