@@ -106,21 +106,25 @@ std :: vector<float> interpolateSingleFloats(float from, float to, int numberOfV
 
 std::vector<CanvasPoint> interpolateRoundPoints(CanvasPoint from, CanvasPoint to, int numberOfValues) {
 	std::vector<CanvasPoint> interpolatedValues;
-	auto xs = interpolateSingleFloats(from.x, to.x, numberOfValues);
-	auto ys = interpolateSingleFloats(from.y, to.y, numberOfValues);
-	auto depths = interpolateSingleFloats(from.depth, to.depth, numberOfValues);
+	std::vector<float> xs = interpolateSingleFloats(from.x, to.x, numberOfValues);
+	std::vector<float> ys = interpolateSingleFloats(from.y, to.y, numberOfValues);
+	std::vector<float> depths = interpolateSingleFloats(from.depth, to.depth, numberOfValues);
 	for (int i=0; i<numberOfValues; i++) {
-		interpolatedValues.push_back(CanvasPoint(round(xs[i]), round(ys[i]), depths[i]));
+		float x = i==0 ? floor(xs[i]) : i==numberOfValues-1 ? ceil(xs[i]) : round(xs[i]);
+		float y = i==0 ? floor(ys[i]) : i==numberOfValues-1 ? ceil(ys[i]) : round(ys[i]);
+		interpolatedValues.push_back(CanvasPoint(x, y, depths[i]));
 	}
 	return interpolatedValues;
 }
 
 std::vector<CanvasPoint> interpolateRoundPoints(TexturePoint from, TexturePoint to, int numberOfValues) {
 	std::vector<CanvasPoint> interpolatedValues;
-	auto xs = interpolateSingleFloats(from.x, to.x, numberOfValues);
-	auto ys = interpolateSingleFloats(from.y, to.y, numberOfValues);
+	std::vector<float> xs = interpolateSingleFloats(from.x, to.x, numberOfValues);
+	std::vector<float> ys = interpolateSingleFloats(from.y, to.y, numberOfValues);
 	for (int i=0; i<numberOfValues; i++) {
-		interpolatedValues.push_back(CanvasPoint(round(xs[i]), round(ys[i])));
+		float x = i==0 ? floor(xs[i]) : i==numberOfValues-1 ? ceil(xs[i]) : round(xs[i]);
+		float y =i==0 ? floor(ys[i]) : i==numberOfValues-1 ? ceil(ys[i]) : round(ys[i]);
+		interpolatedValues.push_back(CanvasPoint(x, y));
 	}
 	return interpolatedValues;
 }
@@ -262,7 +266,7 @@ void lookAt( glm::vec3 lookAtPoint) {
 
 void orbit(bool orb){ 
 	if (orb){
-		camPos = camPos * rotateY(-0.1);
+		camPos = camPos * rotateY(-0.05);
 		lookAt(glm::vec3(0, 0, 0));
 	}	
 }
