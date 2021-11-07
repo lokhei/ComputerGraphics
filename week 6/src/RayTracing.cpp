@@ -12,6 +12,7 @@
 #include <TexturePoint.h>
 #include <Utils.h>
 #include <unordered_map>
+#include <RayTriangleIntersection.h>
 
 
 #define WIDTH 640
@@ -237,6 +238,27 @@ CanvasPoint getCanvasIntersectionPoint(DrawingWindow &window, glm::vec3 vertexPo
 	return CanvasPoint(u,v,z);
 }
 
+RayTriangleIntersection getClosestIntersection(glm::vec3 rayDirection, std::vector<ModelTriangle> triangles) {
+	RayTriangleIntersection rti;
+	rti.distanceFromCamera = std::numeric_limits<float>::infinity();
+	for(int i = 0; i < triangles.size(); i++) {
+		ModelTriangle triangle = triangles[i];
+		glm::vec3 e0 = triangle.vertices[1] - triangle.vertices[0];
+		glm::vec3 e1 = triangle.vertices[2] - triangle.vertices[0];
+		glm::vec3 SPVector = camPos - triangle.vertices[0];
+		glm::mat3 DEMatrix(-rayDirection, e0, e1);
+		glm::vec3 possibleSolution = glm::inverse(DEMatrix) * SPVector;
+		float t = possibleSolution.x, u = possibleSolution.y, v = possibleSolution.z;
+		if((u >= 0.0) && (u <= 1.0) && (v >= 0.0) && (v <= 1.0) && (u + v) <= 1.0) {
+			if(t < rti.distanceFromCamera && t > 0) {
+				rti =  RayTriangleIntersection(possibleSolution, t, triangle, i);
+			}
+		}
+	}
+	return rti;
+
+
+}
 
 glm::mat3 rotateY(float angle) {
 	return glm::mat3(
@@ -342,8 +364,11 @@ int main(int argc, char *argv[]) {
 	
 	float vertexScale = 0.17;
 	
-	std::vector<ModelTriangle> faces = loadObjFile("textured-cornell-box.obj", vertexScale);
+	std::vector<ModelTriangle> faces = loadObjFile("cornell-box.obj", vertexScale);
 	float focalLength = 2.0;
+
+
+	// std::cout << getClosestIntersection(glm::vec3(-0.1, -0.1, -2.0), faces) << "\n\n";
 
 	while (true) {
 		if (window.pollForInputEvents(event)){
