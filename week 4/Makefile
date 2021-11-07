@@ -1,4 +1,4 @@
-PROJECT_NAME := RedNoise
+PROJECT_NAME := WireFrame
 
 BUILD_DIR := build
 

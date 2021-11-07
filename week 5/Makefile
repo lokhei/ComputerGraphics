@@ -1,4 +1,4 @@
-PROJECT_NAME := RedNoise
+PROJECT_NAME := Navigation
 
 BUILD_DIR := build
 
