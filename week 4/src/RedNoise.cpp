@@ -108,8 +108,6 @@ void drawLine(DrawingWindow &window, CanvasPoint from, CanvasPoint to, Colour co
 	float numberOfSteps = fmax(fmax(abs(to.x - from.x), abs(to.y - from.y)), 1);
 	std :: vector<CanvasPoint> points = interpolateRoundPoints(from, to, numberOfSteps + 1);
 	for (int i=0; i<=numberOfSteps; i++) {
-
-		// int depthIndex = (points[i].y * window.width) + points[i].x;
 		float pointDepth = 1 / -points[i].depth;	
 		if (pointDepth > depthBuffer[round(points[i].y)][round(points[i].x)]) {
 			depthBuffer[round(points[i].y)][round(points[i].x)] = pointDepth;
