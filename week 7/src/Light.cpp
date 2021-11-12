@@ -13,6 +13,7 @@
 #include <Utils.h>
 #include <unordered_map>
 #include <RayTriangleIntersection.h>
+#include <math.h>
 
 
 #define WIDTH 640
@@ -331,6 +332,14 @@ void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangles, f
 				Colour colour = intersection.intersectedTriangle.colour;
 				if(is_shadow(intersection, triangles)){
 					colour = Colour(0,0,0);
+				} else {
+					float intensity = 40;
+
+					float distance = glm::length(light - intersection.intersectionPoint);
+					float brightness = std::min(intensity / (4 * M_PI * distance*distance), 1.0);
+					colour.red *= brightness;
+					colour.green *= brightness;
+					colour.blue *= brightness;
 				}
 				uint32_t c = (255 << 24) + (colour.red << 16) + (colour.green << 8) + colour.blue;
 				window.setPixelColour(x, y, c);
