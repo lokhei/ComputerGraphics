@@ -92,6 +92,7 @@ std::vector<ModelTriangle> loadObjFile(const std::string &filename, float scale)
 				triangle.texturePoints[1] = texturePoints[stoi(l2[1])-1];
 				triangle.texturePoints[2] = texturePoints[stoi(l3[1])-1];
 			} 
+			triangle.normal = glm::normalize(glm::cross(glm::vec3(triangle.vertices[1] - triangle.vertices[0]), glm::vec3(triangle.vertices[2] - triangle.vertices[0])));
 			faces.push_back(triangle);
 		}else if(vector[0] == "vt") {
 			texturePoints.push_back(TexturePoint(stof(vector[1]), stof(vector[2])));
@@ -337,6 +338,7 @@ void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangles, f
 
 					float distance = glm::length(light - intersection.intersectionPoint);
 					float brightness = std::min(intensity / (4 * M_PI * distance*distance), 1.0);
+					brightness *= std::max(0.0f, glm::dot(glm::normalize(light - intersection.intersectionPoint), intersection.intersectedTriangle.normal));
 					colour.red *= brightness;
 					colour.green *= brightness;
 					colour.blue *= brightness;
