@@ -285,12 +285,12 @@ bool is_shadow(RayTriangleIntersection intersect, std::vector<ModelTriangle> tri
 		glm::vec3 e0 = triangle.vertices[1] - triangle.vertices[0];
 		glm::vec3 e1 = triangle.vertices[2] - triangle.vertices[0];
 		glm::vec3 SPVector = intersect.intersectionPoint - triangle.vertices[0];
-		glm::mat3 DEMatrix(-normalize(shadow_ray), e0, e1);
+		glm::mat3 DEMatrix(-glm::normalize(shadow_ray), e0, e1);
 		glm::vec3 possibleSolution = glm::inverse(DEMatrix) * SPVector;
 		float t = possibleSolution.x, u = possibleSolution.y, v = possibleSolution.z;
 
 		if((u >= 0.0) && (u <= 1.0) && (v >= 0.0) && (v <= 1.0) && (u + v) <= 1.0) {
-			if(t < glm::length(shadow_ray) && t > 0.00 && i != intersect.triangleIndex) {
+			if(t < glm::length(shadow_ray) && t > 0.01 && i != intersect.triangleIndex) {
 				return true;
 			}
 		}
