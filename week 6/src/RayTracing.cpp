@@ -169,7 +169,7 @@ void drawStrokedTriangle(DrawingWindow &window, CanvasTriangle triangle, Colour 
 	drawLine(window, triangle[1], triangle[2], colour, depthBuffer);
 }
 
-void drawFilledTriangle(DrawingWindow &window, CanvasTriangle triangle, Colour colour, std::vector<std::vector<float>> &depthBuffer, bool outline) {
+void drawFilledTriangle(DrawingWindow &window, CanvasTriangle triangle, Colour colour, std::vector<std::vector<float>> &depthBuffer) {
 	sortTriangle(triangle);
 	std :: vector<CanvasPoint> start = interpolateRoundPoints(triangle[0], triangle[1], triangle[1].y - triangle[0].y + 1);
 	if (triangle[2].y - triangle[1].y + 1 > 1){
@@ -185,12 +185,12 @@ void drawFilledTriangle(DrawingWindow &window, CanvasTriangle triangle, Colour c
 		drawLine(window, start[i], end[i], colour, depthBuffer);
 	}
 
-	if (outline) drawStrokedTriangle(window, triangle, colour, depthBuffer); //outline
+	drawStrokedTriangle(window, triangle, colour, depthBuffer); //outline
 
 }
 
 
-void drawTexturedTriangle(DrawingWindow &window, CanvasTriangle triangle, TextureMap &texMap, std::vector<std::vector<float>> &depthBuffer, bool outline) {
+void drawTexturedTriangle(DrawingWindow &window, CanvasTriangle triangle, TextureMap &texMap, std::vector<std::vector<float>> &depthBuffer) {
 	sortTriangle(triangle);
 	std :: vector<CanvasPoint> xStart = interpolateRoundPoints(triangle[0], triangle[1], triangle[1].y - triangle[0].y + 1);
 	xStart.pop_back();
@@ -226,7 +226,7 @@ void drawTexturedTriangle(DrawingWindow &window, CanvasTriangle triangle, Textur
 		}
 	}
 
-	if (outline) drawStrokedTriangle(window, triangle, Colour(255, 255, 255), depthBuffer);
+	drawStrokedTriangle(window, triangle, Colour(255, 255, 255), depthBuffer);
 }
 
 
@@ -318,7 +318,7 @@ RayTriangleIntersection getClosestIntersection(glm::vec3 camPos, glm::vec3 rayDi
 	return intersection;
 }
 
-void draw(DrawingWindow &window, std::vector<ModelTriangle> triangles, float focalLength, TextureMap textureMap) {
+void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangles, float focalLength, TextureMap textureMap) {
 	window.clearPixels();
 	orbit(orbiting); 
 	for(int x = 0; x < window.width; x++) {
@@ -340,7 +340,7 @@ void draw(DrawingWindow &window, std::vector<ModelTriangle> triangles, float foc
 }
 
 
-void drawRasterisedScene(DrawingWindow &window, std::vector<ModelTriangle> faces, float focalLength, TextureMap textureMap) {
+void drawRasterisedScene(DrawingWindow &window, std::vector<ModelTriangle> faces, float focalLength, TextureMap textureMap, int renderMode) {
 	window.clearPixels();
 	orbit(orbiting); 
 	std::vector<std::vector<float>> depthBuffer (window.height, std::vector<float>(window.width, 0));
@@ -353,8 +353,11 @@ void drawRasterisedScene(DrawingWindow &window, std::vector<ModelTriangle> faces
 			triangle.vertices[j] = getCanvasIntersectionPoint(window,vertexPosition,focalLength );
 			triangle.vertices[j].texturePoint = face.texturePoints[j];
 		}
-
-		if (face.colour.name != "") {
+		
+		if (renderMode == 0) {
+			drawStrokedTriangle(window, triangle, Colour(255, 255, 255), depthBuffer);
+		}
+		else if (face.colour.name != "") {
 
 			TextureMap texture(face.colour.name);
 			for(int j = 0; j < triangle.vertices.size(); j++) {
@@ -362,10 +365,10 @@ void drawRasterisedScene(DrawingWindow &window, std::vector<ModelTriangle> faces
 				triangle.vertices[j].texturePoint.y = texture.height-fmod(triangle.vertices[j].texturePoint.y, 1) * texture.height;
 			}
 
-			drawTexturedTriangle(window, triangle, textureMap, depthBuffer, false);
+			drawTexturedTriangle(window, triangle, textureMap, depthBuffer);
 		}
 		else {
-			drawFilledTriangle(window, triangle, faces[i].colour, depthBuffer, true);
+			drawFilledTriangle(window, triangle, faces[i].colour, depthBuffer);
 		}
 	}
 	
@@ -374,7 +377,7 @@ void drawRasterisedScene(DrawingWindow &window, std::vector<ModelTriangle> faces
 
 
 
-void handleEvent(SDL_Event event, DrawingWindow &window) {
+void handleEvent(SDL_Event event, DrawingWindow &window, int &renderMode) {
 	if (event.type == SDL_KEYDOWN) {
 		//camera movement
 		if (event.key.keysym.sym == SDLK_e) camPos.y += 0.1; //up
@@ -398,6 +401,10 @@ void handleEvent(SDL_Event event, DrawingWindow &window) {
 		else if (event.key.keysym.sym == SDLK_o) orbiting = (orbiting) ? false : true;
 		else if (event.key.keysym.sym == SDLK_r) reset_camera();
 
+		//render Mode
+		else if (event.key.keysym.sym == SDLK_0) renderMode = 0;
+		else if (event.key.keysym.sym == SDLK_1) renderMode = 1;
+		else if (event.key.keysym.sym == SDLK_2) renderMode = 2;
 
 	} else if (event.type == SDL_MOUSEBUTTONDOWN) {
 		window.savePPM("output.ppm");
@@ -412,15 +419,16 @@ int main(int argc, char *argv[]) {
 	TextureMap textureMap = TextureMap("texture.ppm");
 	
 	float vertexScale = 0.5;
+	int renderMode = 1;
 	
 	std::vector<ModelTriangle> triangles = loadObjFile("cornell-box.obj", vertexScale);
 	float focalLength = 2.0;
 	while (true) {
 		if (window.pollForInputEvents(event)){
-			handleEvent(event, window);
-		
-		draw(window, triangles, focalLength, textureMap);
+			handleEvent(event, window, renderMode);
 		}
+		if (renderMode == 2) drawRayTrace(window, triangles, focalLength, textureMap);
+		else drawRasterisedScene(window, triangles, focalLength, textureMap, renderMode);
 
 		window.renderFrame();
 	}
