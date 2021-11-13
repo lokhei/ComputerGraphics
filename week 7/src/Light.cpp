@@ -27,7 +27,7 @@ glm::mat3 camOrientation(
 	glm::vec3(0.0,1.0,0.0),
 	glm::vec3(0.0,0.0,1.0)
 );
-glm::vec3 light(0.0, 0.75, 0.0);
+glm::vec3 light(0.0, 1.0, 0.0);
 
 int planeMultiplier = 200;
 
@@ -320,6 +320,31 @@ RayTriangleIntersection getClosestIntersection(glm::vec3 camPos, glm::vec3 rayDi
 	return intersection;
 }
 
+
+float getBrightness(glm::vec3 intersectionPoint, glm::vec3 normal) {
+	float intensity = 40;
+	float specularScale = 256;
+
+	glm::vec3 lightRay = light - intersectionPoint;
+	float length = glm::length(lightRay);
+
+	glm::vec3 cameraRay = glm::normalize((camPos * camOrientation) - intersectionPoint); //norm
+
+	float brightness = std::min(1.0, intensity/(4 * M_PI * length*length)); // Proximity lighting
+
+	float angleOfIncidence = std::max(0.0f, glm::dot(glm::normalize(lightRay), normal)); // Angle of Incidence Lighting
+	brightness *= angleOfIncidence;
+
+	glm::vec3 angleOfReflection = glm::normalize(lightRay) - ((2.0f*normal)*glm::dot(glm::normalize(lightRay), normal));
+	float specular = std::pow(glm::dot(glm::normalize(angleOfReflection), glm::normalize(cameraRay)), specularScale); // Specular Lighting
+
+	brightness += std::max(0.0f, specular);
+	brightness = std::max(0.2f, std::min(1.0f, brightness)); // Ambient Lighting
+
+	return brightness;
+}
+
+
 void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangles, float focalLength, TextureMap textureMap) {
 	window.clearPixels();
 	orbit(orbiting); 
@@ -328,21 +353,17 @@ void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangles, f
 			glm::vec3 direction = glm::vec3(int(window.width / 2) - x, y - int(window.height / 2), focalLength*planeMultiplier);
 			glm::vec3 ray = normalize(camOrientation * (camPos-direction));
 			RayTriangleIntersection intersection = getClosestIntersection(camPos, ray, triangles);
-
+			
 			if(!isinf(intersection.distanceFromCamera)) {
+				float brightness = 0.1;
 				Colour colour = intersection.intersectedTriangle.colour;
-				if(is_shadow(intersection, triangles)){
-					colour = Colour(0,0,0);
-				} else {
-					float intensity = 40;
-
-					float distance = glm::length(light - intersection.intersectionPoint);
-					float brightness = std::min(intensity / (4 * M_PI * distance*distance), 1.0);
-					brightness *= std::max(0.0f, glm::dot(glm::normalize(light - intersection.intersectionPoint), intersection.intersectedTriangle.normal));
-					colour.red *= brightness;
-					colour.green *= brightness;
-					colour.blue *= brightness;
+				
+				if(!is_shadow(intersection, triangles)){
+					brightness = getBrightness(intersection.intersectionPoint, intersection.intersectedTriangle.normal);
 				}
+				colour.red *= brightness;
+				colour.green *= brightness;
+				colour.blue *= brightness;
 				uint32_t c = (255 << 24) + (colour.red << 16) + (colour.green << 8) + colour.blue;
 				window.setPixelColour(x, y, c);
 			}
@@ -430,7 +451,7 @@ int main(int argc, char *argv[]) {
 	TextureMap textureMap = TextureMap("texture.ppm");
 	
 	float vertexScale = 0.5;
-	int renderMode = 1;
+	int renderMode = 2;
 	
 	std::vector<ModelTriangle> triangles = loadObjFile("cornell-box.obj", vertexScale);
 	float focalLength = 2.0;
