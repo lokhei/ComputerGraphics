@@ -57,6 +57,34 @@ std::unordered_map<std::string, Colour> loadMtlFile(const std::string &filename)
 	return colours;
 }
 
+std::vector<ModelTriangle> vertexNormals(std::vector<ModelTriangle> triangles) {
+
+	for(int i = 0; i < triangles.size(); i++) {
+		ModelTriangle triangle = triangles[i];
+		std::vector<glm::vec3> vertex_normals;
+		for(int v = 0; v < triangle.vertices.size(); v++) {
+			glm::vec3 vertex = triangle.normal;
+			int count = 1;
+			for(int j = 0; j < triangles.size(); j++) {
+				ModelTriangle tri = triangles[j];
+				for(int u = 0; u < tri.vertices.size(); u++) {
+					if(i != j && triangle.vertices[v].x == tri.vertices[u].x && triangle.vertices[v].y == tri.vertices[u].y && triangle.vertices[v].z == tri.vertices[u].z) {
+						if (std::acos(glm::dot(triangle.normal, tri.normal) / (length(triangle.normal) * length(tri.normal))) < M_PI / 4) {
+							vertex = vertex + tri.normal;
+							count = count + 1;
+						}
+					}
+				}
+			}
+			vertex = vertex / float(count);
+			triangles[i].vertexNormals[v] = normalize(vertex);
+		}
+	}
+
+	return triangles;
+}
+
+
 std::vector<ModelTriangle> loadObjFile(const std::string &filename, float scale) {
 	std::vector<glm::vec3> vertices;
 	std::vector<ModelTriangle> faces;
@@ -105,6 +133,10 @@ std::vector<ModelTriangle> loadObjFile(const std::string &filename, float scale)
 			texturePoints.push_back(TexturePoint(stof(vector[1]), stof(vector[2])));
 		}
 	}
+
+	if(normals.empty()) {
+		faces = vertexNormals(faces);
+	} 
 	inputStr.close();
 	return faces;
 }
@@ -322,6 +354,8 @@ RayTriangleIntersection getClosestIntersection(glm::vec3 camPos, glm::vec3 rayDi
 		if((u >=  0.0) && (u <= 1.0) && (v >= 0.0) && (v <= 1.0) && (u + v) <= 1.0 && t < intersection.distanceFromCamera && t > 0.0) {
 			glm::vec3 point = triangle.vertices[0]+u*e0+v*e1;
 			intersection =  RayTriangleIntersection(point, t, triangle, i);
+			intersection.u = u;
+			intersection.v = v;
 		}
 	}
 	return intersection;
@@ -335,7 +369,7 @@ float getBrightness(glm::vec3 intersectionPoint, glm::vec3 normal) {
 	glm::vec3 lightRay = light - intersectionPoint;
 	float length = glm::length(lightRay);
 
-	glm::vec3 cameraRay = glm::normalize((camPos * camOrientation) - intersectionPoint); //norm
+	glm::vec3 cameraRay = glm::normalize((camPos * camOrientation) - intersectionPoint);
 
 	float brightness = intensity/(4 * M_PI * length*length); // Proximity lighting
 	float angleOfIncidence = std::max(0.0f, glm::dot(glm::normalize(lightRay), normal)); // Angle of Incidence Lighting
@@ -350,6 +384,34 @@ float getBrightness(glm::vec3 intersectionPoint, glm::vec3 normal) {
 	return brightness;
 }
 
+float gouraud(RayTriangleIntersection intersection) {
+	float specularScale = 256;
+
+	glm::vec3 lightRay = light - intersection.intersectionPoint;
+
+	glm::vec3 cameraRay = glm::normalize((camPos * camOrientation) - intersection.intersectionPoint);
+
+	ModelTriangle triangle = intersection.intersectedTriangle;
+	std::vector<glm::vec3> reflections;
+
+
+	std::vector<float> brightnesses;
+	for(int i = 0; i < 3; i++) {
+		brightnesses.push_back(glm::dot(triangle.vertexNormals[i], glm::normalize(lightRay)));
+		reflections.push_back( glm::normalize(glm::normalize(lightRay) - ((2.0f*triangle.vertexNormals[i])*glm::dot(glm::normalize(lightRay), triangle.vertexNormals[i]))));
+
+	}
+	float brightness = (1 - intersection.u - intersection.v) * brightnesses[0] + intersection.u * brightnesses[1] + intersection.v * brightnesses[2];
+	glm::vec3 angleOfReflection = (1 - intersection.u - intersection.v) * reflections[0] + intersection.u * reflections[1] + intersection.v * reflections[2];
+
+	float specular = std::pow(glm::dot(glm::normalize(angleOfReflection), glm::normalize(cameraRay)), specularScale);
+
+	brightness += std::max(0.0f, specular);
+	brightness = std::max(0.2f, std::min(1.0f, brightness));
+
+	
+	return brightness;
+}
 
 void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangles, float focalLength, TextureMap textureMap) {
 	window.clearPixels();
@@ -365,11 +427,11 @@ void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangles, f
 				Colour colour = intersection.intersectedTriangle.colour;
 				
 				if(!is_shadow(intersection, triangles)){
-					auto u = intersection.intersectionPoint[1];
-				auto v = intersection.intersectionPoint[2];
-					auto normal = u * intersection.intersectedTriangle.vertexNormals[1] + v * intersection.intersectedTriangle.vertexNormals[2] + (1 - u - v) * intersection.intersectedTriangle.vertexNormals[0];
-					//intersection.intersectedTriangle.normal
-					brightness = getBrightness(intersection.intersectionPoint, normal);
+					// auto u = intersection.intersectionPoint[1];
+					// auto v = intersection.intersectionPoint[2];
+					//auto normal = intersection.intersectedTriangle.normal
+					// brightness = getBrightness(intersection.intersectionPoint, normal);
+					brightness = gouraud(intersection);
 				}
 				colour.red *= brightness;
 				colour.green *= brightness;
@@ -463,8 +525,9 @@ int main(int argc, char *argv[]) {
 	float vertexScale = 0.5;
 	int renderMode = 2;
 	
-	// std::vector<ModelTriangle> triangles = loadObjFile("cornell-box.obj", vertexScale);
-	std::vector<ModelTriangle> triangles = loadObjFile("sphere.obj", vertexScale);
+	std::vector<ModelTriangle> triangles = loadObjFile("cornell-box.obj", vertexScale);
+	std::vector<ModelTriangle> sphere = loadObjFile("sphere.obj", vertexScale);
+		triangles.insert(triangles.end(), sphere.begin(), sphere.end());
 
 	float focalLength = 2.0;
 	while (true) {
