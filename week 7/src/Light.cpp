@@ -27,7 +27,7 @@ glm::mat3 camOrientation(
 	glm::vec3(0.0,1.0,0.0),
 	glm::vec3(0.0,0.0,1.0)
 );
-glm::vec3 light(0.0, 1.2, 0.0);
+glm::vec3 light(0.0, 1.0, 0.0);
 
 int planeMultiplier = 200;
 
@@ -413,7 +413,26 @@ float gouraud(RayTriangleIntersection intersection) {
 	return brightness;
 }
 
-void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangles, float focalLength, TextureMap textureMap) {
+float phong(RayTriangleIntersection intersection) {
+	float specularScale = 256;
+
+
+	ModelTriangle t = intersection.intersectedTriangle;
+	glm::vec3 normal = (1 - intersection.u - intersection.v) * t.vertexNormals[0] + intersection.u * t.vertexNormals[1] + intersection.v * t.vertexNormals[2];
+	glm::vec3 light_ray = light - intersection.intersectionPoint;
+	glm::vec3 view_ray = normalize(camPos - intersection.intersectionPoint);
+	glm::vec3 reflection_ray = normalize(normalize(light_ray) - (normal * 2.0f * dot(normalize(light_ray), normal)));
+
+	float brightness = dot(normal, normalize(light_ray)); //angle of incidence
+	brightness *=  40/(4*M_PI*(pow(length(light_ray),2))); //proximity
+
+	float specular = pow(dot(reflection_ray, view_ray),specularScale); //specular
+	brightness += std::max(0.0f, specular);
+	brightness = std::max(0.2f, std::min(1.0f, brightness)); //ambient
+	
+	return brightness;
+}
+void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangles, float focalLength, TextureMap textureMap, int lightMode) {
 	window.clearPixels();
 	orbit(orbiting); 
 	for(int x = 0; x < window.width; x++) {
@@ -427,11 +446,15 @@ void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangles, f
 				Colour colour = intersection.intersectedTriangle.colour;
 				
 				if(!is_shadow(intersection, triangles)){
-					// auto u = intersection.intersectionPoint[1];
-					// auto v = intersection.intersectionPoint[2];
-					//auto normal = intersection.intersectedTriangle.normal
-					// brightness = getBrightness(intersection.intersectionPoint, normal);
-					brightness = gouraud(intersection);
+					if (lightMode == 0){
+						glm::vec3 normal = intersection.intersectedTriangle.normal;
+						brightness = getBrightness(intersection.intersectionPoint, normal);
+					}else if (lightMode == 1){
+						brightness = gouraud(intersection);
+					}else {
+						brightness = phong(intersection);
+					}
+
 				}
 				colour.red *= brightness;
 				colour.green *= brightness;
@@ -481,7 +504,7 @@ void drawRasterisedScene(DrawingWindow &window, std::vector<ModelTriangle> faces
 
 
 
-void handleEvent(SDL_Event event, DrawingWindow &window, int &renderMode) {
+void handleEvent(SDL_Event event, DrawingWindow &window, int &renderMode, int &lightMode) {
 	if (event.type == SDL_KEYDOWN) {
 		//camera movement
 		if (event.key.keysym.sym == SDLK_e) camPos.y += 0.1; //up
@@ -509,6 +532,9 @@ void handleEvent(SDL_Event event, DrawingWindow &window, int &renderMode) {
 		else if (event.key.keysym.sym == SDLK_0) renderMode = 0;
 		else if (event.key.keysym.sym == SDLK_1) renderMode = 1;
 		else if (event.key.keysym.sym == SDLK_2) renderMode = 2;
+		else if (event.key.keysym.sym == SDLK_3) lightMode = 0; //normal
+		else if (event.key.keysym.sym == SDLK_4) lightMode = 1; //gouraud
+		else if (event.key.keysym.sym == SDLK_5) lightMode = 2; //phong
 
 	} else if (event.type == SDL_MOUSEBUTTONDOWN) {
 		window.savePPM("output.ppm");
@@ -524,17 +550,19 @@ int main(int argc, char *argv[]) {
 	
 	float vertexScale = 0.5;
 	int renderMode = 2;
+	int lightMode = 0;
+
 	
 	std::vector<ModelTriangle> triangles = loadObjFile("cornell-box.obj", vertexScale);
 	std::vector<ModelTriangle> sphere = loadObjFile("sphere.obj", vertexScale);
-		triangles.insert(triangles.end(), sphere.begin(), sphere.end());
+	triangles.insert(triangles.end(), sphere.begin(), sphere.end());
 
 	float focalLength = 2.0;
 	while (true) {
 		if (window.pollForInputEvents(event)){
-			handleEvent(event, window, renderMode);
+			handleEvent(event, window, renderMode, lightMode);
 		}
-		if (renderMode == 2) drawRayTrace(window, triangles, focalLength, textureMap);
+		if (renderMode == 2) drawRayTrace(window, triangles, focalLength, textureMap, lightMode);
 		else drawRasterisedScene(window, triangles, focalLength, textureMap, renderMode);
 
 		window.renderFrame();
