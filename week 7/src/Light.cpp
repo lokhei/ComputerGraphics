@@ -349,7 +349,7 @@ RayTriangleIntersection getClosestIntersection(glm::vec3 camPos, glm::vec3 rayDi
 		glm::mat3 DEMatrix(-rayDirection, e0, e1);
 		glm::vec3 possibleSolution = glm::inverse(DEMatrix) * SPVector;
 		float t = possibleSolution.x, u = possibleSolution.y, v = possibleSolution.z;
-		if((u >=  0.0) && (u <= 1.0) && (v >= 0.0) && (v <= 1.0) && (u + v) <= 1.0 && t < intersection.distanceFromCamera && t > 0) {
+		if((u >=  0.0) && (u <= 1.0) && (v >= 0.0) && (v <= 1.0) && (u + v) <= 1.0 && t < intersection.distanceFromCamera && t > 0.0) {
 			glm::vec3 point = triangle.vertices[0]+u*e0+v*e1;
 			intersection =  RayTriangleIntersection(point, t, triangle, i);
 			intersection.u = u;
@@ -385,6 +385,7 @@ float getBrightness(glm::vec3 intersectionPoint, glm::vec3 normal) {
 float gouraud(RayTriangleIntersection intersection) {
 	float intensity = 30;
 	float specularScale = 256;
+
 	glm::vec3 lightRay = light - intersection.intersectionPoint;
 	float length = glm::length(lightRay);
 	glm::vec3 cameraRay = glm::normalize((camPos * camOrientation) - intersection.intersectionPoint);
@@ -450,7 +451,7 @@ void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangles, f
 			RayTriangleIntersection intersection = getClosestIntersection(camPos, ray, triangles);
 			
 			if(!isinf(intersection.distanceFromCamera)) {
-				float brightness = 0.1;
+				float brightness = 0.2;
 				Colour colour = intersection.intersectedTriangle.colour;
 				
 				if(!is_shadow(intersection, triangles)){
