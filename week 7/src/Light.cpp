@@ -399,13 +399,13 @@ float gouraud(RayTriangleIntersection intersection) {
 
 	for(int i = 0; i < triangle.vertexNormals.size(); i++) {
 		incidences.push_back(glm::dot(triangle.vertexNormals[i], glm::normalize(lightRay)));
-		reflections.push_back( glm::normalize(glm::normalize(lightRay) - ((2.0f*triangle.vertexNormals[i])*glm::dot(glm::normalize(lightRay), triangle.vertexNormals[i]))));
+		reflections.push_back(glm::normalize(glm::normalize(lightRay) - ((2.0f*triangle.vertexNormals[i])*glm::dot(glm::normalize(lightRay), triangle.vertexNormals[i]))));
 	}
 	float angleOfIncidence = (1 - intersection.u - intersection.v) * incidences[0] + intersection.u * incidences[1] + intersection.v * incidences[2];
 	brightness *= std::max(0.0f, angleOfIncidence); 
 
 	glm::vec3 angleOfReflection = (1 - intersection.u - intersection.v) * reflections[0] + intersection.u * reflections[1] + intersection.v * reflections[2];
-	float specular = std::pow(glm::dot(glm::normalize(angleOfReflection), cameraRay), specularScale);
+	float specular = std::pow(glm::dot(angleOfReflection, cameraRay), specularScale);
 
 	brightness += std::max(0.0f, specular);
 	brightness = std::max(0.2f, std::min(1.0f, brightness));
@@ -427,12 +427,12 @@ float phong(RayTriangleIntersection intersection) {
 	glm::vec3 normal = (1 - intersection.u - intersection.v) * triangle.vertexNormals[0] + intersection.u * triangle.vertexNormals[1] + intersection.v * triangle.vertexNormals[2];
 	
 	float brightness = intensity/(4 * M_PI * length*length); // Proximity lighting
-	float angleOfIncidence =  glm::dot(glm::normalize(lightRay),normal);
+	float angleOfIncidence =  glm::dot(glm::normalize(lightRay),glm::normalize(normal));
 	brightness *= std::max(0.0f, angleOfIncidence); 
 
 
-	glm::vec3 angleOfReflection = normalize(normalize(lightRay) - (normal*2.0f*glm::dot(normalize(lightRay), normal)));
-	float specular = std::pow(glm::dot(glm::normalize(angleOfReflection), cameraRay), specularScale); // Specular Lighting
+	glm::vec3 angleOfReflection = glm::normalize(glm::normalize(lightRay) - (glm::normalize(normal)*2.0f*glm::dot(glm::normalize(lightRay), glm::normalize(normal))));
+	float specular = std::pow(glm::dot(angleOfReflection, cameraRay), specularScale); // Specular Lighting
 
 	brightness += std::max(0.0f, specular);
 	brightness = std::max(0.2f, std::min(1.0f, brightness)); //ambient
