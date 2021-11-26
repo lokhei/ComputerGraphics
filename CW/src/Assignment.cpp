@@ -25,6 +25,7 @@ glm::vec3 camPos(0.0, 0.0, 4.0);
 glm::vec3 light(1.0, 1.0, 2.0);
 
 
+
 // for sphere
 // glm::vec3 camPos(0.0, 1.3, 3.5);
 // glm::vec3 light(1.0, 2.0, 2.8);
@@ -37,6 +38,12 @@ glm::mat3 camOrientation(
 
 
 int planeMultiplier = 200;
+
+//lighting settings
+bool proximity = true;
+bool incidence = true;
+bool specular = true;
+
 
 
 
@@ -63,6 +70,7 @@ std::unordered_map<std::string, Colour> loadMtlFile(const std::string &filename,
 		}
 	}
 	inputStream.close();
+
 	return colours;
 }
 
@@ -259,7 +267,7 @@ void drawTexturedTriangle(DrawingWindow &window, CanvasTriangle triangle, Textur
 	std :: vector<TexturePoint> textureEnds = interpolateRoundPoints(triangle[0].texturePoint, triangle[2].texturePoint, triangle[2].y - triangle[0].y + 1);
 
 	for(int i=0; i <= triangle[2].y - triangle[0].y; i++) {
-		float numberOfSteps = abs(xStart[i].x - xEnd[i].x);
+		float numberOfSteps = std::max(abs(xStart[i].x - xEnd[i].x), 1.0f);
 		// float numberOfSteps = std::max(std::max(abs(xStart[i].x - xEnd[i].x), abs(xStart[i].y - xEnd[i].y)), 1.0f);
 		//interpolate between start and end of rake to find texture point for pixel
 		std :: vector<TexturePoint> texPoints = interpolateRoundPoints(textureStarts[i], textureEnds[i], numberOfSteps + 1);
@@ -386,14 +394,14 @@ float getBrightness(glm::vec3 intersectionPoint, glm::vec3 normal) {
 
 	glm::vec3 cameraRay = glm::normalize((camPos * camOrientation) - intersectionPoint);
 
-	float brightness = intensity/(4 * M_PI * length*length); // Proximity lighting
-	float angleOfIncidence = glm::dot(glm::normalize(lightRay), normal); // Angle of Incidence Lighting
+	float brightness = proximity ? intensity/(4 * M_PI * length*length) : 1.0; // Proximity lighting
+	float angleOfIncidence = incidence ? glm::dot(glm::normalize(lightRay), normal) : 1.0; // Angle of Incidence Lighting
 	brightness *= std::max(0.0f, angleOfIncidence);
 
 	glm::vec3 angleOfReflection = glm::normalize(lightRay) - ((2.0f*normal)*glm::dot(glm::normalize(lightRay), normal));
-	float specular = std::pow(glm::dot(glm::normalize(angleOfReflection), cameraRay), specularScale); // Specular Lighting
+	float specularLight = specular ? std::pow(glm::dot(glm::normalize(angleOfReflection), cameraRay), specularScale) : 0.0; // Specular Lighting
 
-	brightness += std::max(0.0f, specular);
+	brightness += std::max(0.0f, specularLight);
 	brightness = std::max(0.2f, std::min(1.0f, brightness)); // Ambient Lighting
 
 	return brightness;
@@ -412,19 +420,19 @@ float gouraud(RayTriangleIntersection intersection) {
 	std::vector<glm::vec3> reflections;
 	std::vector<float> incidences;
 
-	float brightness = intensity/(4 * M_PI * length*length); //proximity lighting
+	float brightness = proximity ? intensity/(4 * M_PI * length*length) : 1.0; //proximity lighting
 
 	for(int i = 0; i < triangle.vertexNormals.size(); i++) {
 		incidences.push_back(glm::dot(triangle.vertexNormals[i], glm::normalize(lightRay)));
 		reflections.push_back(glm::normalize(glm::normalize(lightRay) - ((2.0f*triangle.vertexNormals[i])*glm::dot(glm::normalize(lightRay), triangle.vertexNormals[i]))));
 	}
-	float angleOfIncidence = (1 - intersection.u - intersection.v) * incidences[0] + intersection.u * incidences[1] + intersection.v * incidences[2];
+	float angleOfIncidence = incidence ? (1 - intersection.u - intersection.v) * incidences[0] + intersection.u * incidences[1] + intersection.v * incidences[2] : 1.0;
 	brightness *= std::max(0.0f, angleOfIncidence); 
 
 	glm::vec3 angleOfReflection = (1 - intersection.u - intersection.v) * reflections[0] + intersection.u * reflections[1] + intersection.v * reflections[2];
-	float specular = std::pow(glm::dot(angleOfReflection, cameraRay), specularScale);
+	float specularLighting = specular ? std::pow(glm::dot(angleOfReflection, cameraRay), specularScale) : 0.0;
 
-	brightness += std::max(0.0f, specular*0.2f);
+	brightness += std::max(0.0f, specularLighting*0.2f);
 	brightness = std::max(0.2f, std::min(1.0f, brightness));
 
 	
@@ -443,15 +451,15 @@ float phong(RayTriangleIntersection intersection) {
 	//interpolated normals
 	glm::vec3 normal = (1 - intersection.u - intersection.v) * triangle.vertexNormals[0] + intersection.u * triangle.vertexNormals[1] + intersection.v * triangle.vertexNormals[2];
 	
-	float brightness = intensity/(4 * M_PI * length*length); // Proximity lighting
-	float angleOfIncidence =  glm::dot(glm::normalize(lightRay),glm::normalize(normal));
+	float brightness = proximity ? intensity/(4 * M_PI * length*length) : 1.0; // Proximity lighting
+	float angleOfIncidence =  incidence ? glm::dot(glm::normalize(lightRay),glm::normalize(normal)) : 1.0;
 	brightness *= std::max(0.0f, angleOfIncidence); 
 
 
 	glm::vec3 angleOfReflection = glm::normalize(glm::normalize(lightRay) - (glm::normalize(normal)*2.0f*glm::dot(glm::normalize(lightRay), glm::normalize(normal))));
-	float specular = std::pow(glm::dot(angleOfReflection, cameraRay), specularScale); // Specular Lighting
+	float specularLighting = specular ? std::pow(glm::dot(angleOfReflection, cameraRay), specularScale) : 0.0; // Specular Lighting
 
-	brightness += std::max(0.0f, specular*0.2f);
+	brightness += std::max(0.0f, specularLighting*0.2f);
 	brightness = std::max(0.2f, std::min(1.0f, brightness)); //ambient
 	
 	return brightness;
@@ -530,9 +538,10 @@ void drawRasterisedScene(DrawingWindow &window, std::vector<ModelTriangle> faces
 		}
 		
 		if (renderMode == 0) {
-			drawStrokedTriangle(window, triangle, Colour(255, 255, 255), depthBuffer);
+			drawStrokedTriangle(window, triangle, Colour(255, 255, 255), depthBuffer); //wireframe
 		}
 		else if (face.colour.name != "") {
+			
 
 			TextureMap texture(face.colour.name);
 			for(int j = 0; j < triangle.vertices.size(); j++) {
@@ -540,11 +549,11 @@ void drawRasterisedScene(DrawingWindow &window, std::vector<ModelTriangle> faces
 				triangle.vertices[j].texturePoint.x = fmod(triangle.vertices[j].texturePoint.x, 1 ) * texture.width;
 				triangle.vertices[j].texturePoint.y = texture.height-fmod(triangle.vertices[j].texturePoint.y, 1) * texture.height;
 			}
-
 			drawTexturedTriangle(window, triangle, texture, depthBuffer);
 		}
 		else {
 			drawFilledTriangle(window, triangle, faces[i].colour, depthBuffer);
+
 
 		}
 	}
@@ -581,9 +590,14 @@ void handleEvent(SDL_Event event, DrawingWindow &window, int &renderMode, int &l
 		else if (event.key.keysym.sym == SDLK_0) renderMode = 0;
 		else if (event.key.keysym.sym == SDLK_1) renderMode = 1;
 		else if (event.key.keysym.sym == SDLK_2) renderMode = 2;
+		//light Mode
 		else if (event.key.keysym.sym == SDLK_3) lightMode = 0; //normal
 		else if (event.key.keysym.sym == SDLK_4) lightMode = 1; //gouraud
 		else if (event.key.keysym.sym == SDLK_5) lightMode = 2; //phong
+		else if (event.key.keysym.sym == SDLK_6) proximity = !proximity;
+		else if (event.key.keysym.sym == SDLK_7) incidence = !incidence; 
+		else if (event.key.keysym.sym == SDLK_8) specular = !specular;
+
 
 	} else if (event.type == SDL_MOUSEBUTTONDOWN) {
 		window.savePPM("output.ppm");
@@ -601,12 +615,16 @@ int main(int argc, char *argv[]) {
 
 	std::unordered_map<std::string, TextureMap> textures;
 	
-	// std::vector<ModelTriangle> triangles = loadObjFile("cornell-box.obj", vertexScale);
-	std::vector<ModelTriangle> triangles = loadObjFile("textured-cornell-box.obj", vertexScale, textures);
+	// std::vector<ModelTriangle> triangles = loadObjFile("logo.obj", 0.003, textures);
+	// std::vector<ModelTriangle> triangles = loadObjFile("textured-cornell-box.obj", vertexScale, textures);
+	std::vector<ModelTriangle> triangles = loadObjFile("cornell-box.obj", vertexScale, textures);
 
 
-	// std::vector<ModelTriangle> sphere = loadObjFile("sphere.obj", vertexScale);
+
+	// std::vector<ModelTriangle> sphere = loadObjFile("sphere.obj", vertexScale, textures);
 	// triangles.insert(triangles.end(), sphere.begin(), sphere.end());
+	// triangles.insert(triangles.end(), logo.begin(), logo.end());
+
 
 	float focalLength = 2.0;
 	while (true) {
