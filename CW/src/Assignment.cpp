@@ -39,7 +39,8 @@ glm::mat3 camOrientation(
 int planeMultiplier = 200;
 
 
-std::unordered_map<std::string, Colour> loadMtlFile(const std::string &filename) {
+
+std::unordered_map<std::string, Colour> loadMtlFile(const std::string &filename, std::unordered_map<std::string, TextureMap> &textures) {
 	std::unordered_map<std::string, Colour> colours;
 
 	std::ifstream inputStream(filename, std::ifstream::in);
@@ -50,13 +51,14 @@ std::unordered_map<std::string, Colour> loadMtlFile(const std::string &filename)
 		std::vector<std::string> line = split(nextLine, ' ');
 
 		if (line[0] == "newmtl") {
-			colour_name = line[1];
+			colour_name = line[1];	
 		} else if (line[0] == "Kd") {
 			Colour colour(int(std::stof(line[1])*255),int(std::stof(line[2])*255),int(std::stof(line[3])*255));
 			colours.insert({colour_name, colour});
 		} else if(line[0] == "map_Kd") {
 			Colour colour = colours[colour_name];
 			colour.name = line[1];
+			textures.insert({line[1], TextureMap(line[1])});
 			colours[colour_name] = colour;
 		}
 	}
@@ -91,7 +93,7 @@ std::vector<ModelTriangle> vertexNormals(std::vector<ModelTriangle> triangles) {
 }
 
 
-std::vector<ModelTriangle> loadObjFile(const std::string &filename, float scale) {
+std::vector<ModelTriangle> loadObjFile(const std::string &filename, float scale, std::unordered_map<std::string, TextureMap> &textures) {
 	std::vector<glm::vec3> vertices;
 	std::vector<ModelTriangle> faces;
 	std::vector<TexturePoint> texturePoints;
@@ -105,7 +107,7 @@ std::vector<ModelTriangle> loadObjFile(const std::string &filename, float scale)
 	while (std::getline(inputStr, nextLine)) { //extracts from inputStr and stores into nextLine
 		std::vector<std::string> vector = split(nextLine, ' '); //split line by spaces
 		if (vector[0] == "mtllib") {
-			materials = loadMtlFile(vector[1]);
+			materials = loadMtlFile(vector[1], textures);
 		}else if (vector[0] == "usemtl") {
 			colour =materials[vector[1]];
 		}else if (vector[0] == "v") {
@@ -353,7 +355,7 @@ bool is_shadow(RayTriangleIntersection intersect, std::vector<ModelTriangle> tri
 }
 
 
-RayTriangleIntersection getClosestIntersection(glm::vec3 camPos, glm::vec3 rayDirection, std::vector<ModelTriangle> triangles) {
+RayTriangleIntersection getClosestIntersection(glm::vec3 rayDirection, std::vector<ModelTriangle> triangles) {
 	RayTriangleIntersection intersection;
 	intersection.distanceFromCamera = std::numeric_limits<float>::infinity();
 	for(int i = 0; i < triangles.size(); i++) {
@@ -456,29 +458,15 @@ float phong(RayTriangleIntersection intersection) {
 }
 
 
-uint32_t getTexture(RayTriangleIntersection intersection, TextureMap texture) {
-	ModelTriangle t = intersection.intersectedTriangle;
-
-	float x = ((1 - intersection.u - intersection.v) * t.texturePoints[0].x + intersection.u * t.texturePoints[1].x + intersection.v * t.texturePoints[2].x);
-	float y = ((1 - intersection.u - intersection.v) * t.texturePoints[0].y + intersection.u * t.texturePoints[1].y + intersection.v * t.texturePoints[2].y);
-
-	x = fmod(x, 1) * texture.width;
-	y = texture.height - fmod(y,1)*texture.height;
-	return texture.pixels[round(y)*texture.width + round(x)];
-}
-
-
-void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangles, float focalLength, int lightMode) {
+void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangles, float focalLength, int lightMode, std::unordered_map<std::string, TextureMap> textures) {
 	window.clearPixels();
 	orbit(orbiting); 
-
-	TextureMap texture("texture.ppm");
 
 	for(int x = 0; x < window.width; x++) {
 		for(int y = 0; y < window.height; y++) {
 			glm::vec3 direction = glm::vec3(int(window.width / 2) - x, y - int(window.height / 2), focalLength*planeMultiplier);
 			glm::vec3 ray = normalize(camOrientation * (camPos-direction));
-			RayTriangleIntersection intersection = getClosestIntersection(camPos, ray, triangles);
+			RayTriangleIntersection intersection = getClosestIntersection(ray, triangles);
 
 			Colour colour;
 
@@ -496,14 +484,19 @@ void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangles, f
 					}
 				}
 				
-				std::string name = intersection.intersectedTriangle.colour.name;
-				if (name != "") { //texture
-					// TextureMap texture(name);
+				if (intersection.intersectedTriangle.colour.name != "") { //texture
+					ModelTriangle triangle = intersection.intersectedTriangle; //triangles[intersection.triangleIndex];
+                    TextureMap texture = textures[triangle.colour.name];
+                    // interpolate the ratios of texture points
+                    float ratioX = (1 - intersection.u - intersection.v) * triangle.texturePoints[0].x + intersection.u * triangle.texturePoints[1].x + intersection.v * triangle.texturePoints[2].x;
+                    float ratioY = (1 - intersection.u - intersection.v) * triangle.texturePoints[0].y + intersection.u * triangle.texturePoints[1].y + intersection.v * triangle.texturePoints[2].y;
+					float x = fmod(ratioX, 1) * texture.width; //get co-ordinates
+					float y = texture.height - fmod(ratioY,1)*texture.height;
+					uint32_t c = texture.pixels[round(y)*texture.width + round(x)];
 					
-					uint32_t t = getTexture(intersection, texture);
-					uint8_t red = (t >> 16) & 0xff;
-					uint8_t green = (t >>  8) & 0xff;
-					uint8_t blue = t & 0xff;
+                    uint8_t red = (c >> 16) & 0xff;
+                    uint8_t green = (c >> 8) & 0xff;
+                    uint8_t blue = c & 0xff;
 					colour = Colour(red, green, blue);
 
 				}else{
@@ -605,9 +598,11 @@ int main(int argc, char *argv[]) {
 	float vertexScale = 0.5;
 	int renderMode = 2;
 	int lightMode = 0;
+
+	std::unordered_map<std::string, TextureMap> textures;
 	
 	// std::vector<ModelTriangle> triangles = loadObjFile("cornell-box.obj", vertexScale);
-	std::vector<ModelTriangle> triangles = loadObjFile("textured-cornell-box.obj", vertexScale);
+	std::vector<ModelTriangle> triangles = loadObjFile("textured-cornell-box.obj", vertexScale, textures);
 
 
 	// std::vector<ModelTriangle> sphere = loadObjFile("sphere.obj", vertexScale);
@@ -618,7 +613,7 @@ int main(int argc, char *argv[]) {
 		if (window.pollForInputEvents(event)){
 			handleEvent(event, window, renderMode, lightMode);
 		}
-		if (renderMode == 2) drawRayTrace(window, triangles, focalLength, lightMode);
+		if (renderMode == 2) drawRayTrace(window, triangles, focalLength, lightMode, textures);
 		else drawRasterisedScene(window, triangles, focalLength, renderMode);
 
 		window.renderFrame();
