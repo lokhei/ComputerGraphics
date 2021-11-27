@@ -12,6 +12,7 @@ struct ModelTriangle {
 	Colour colour{};
 	glm::vec3 normal{};
 	std::array<glm::vec3, 3> vertexNormals{};
+	bool mirror = false;
 
 
 	ModelTriangle();

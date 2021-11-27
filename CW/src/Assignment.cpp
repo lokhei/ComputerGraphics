@@ -75,7 +75,6 @@ std::unordered_map<std::string, Colour> loadMtlFile(const std::string &filename,
 }
 
 std::vector<ModelTriangle> vertexNormals(std::vector<ModelTriangle> triangles) {
-
 	for(int i = 0; i < triangles.size(); i++) {
 		ModelTriangle triangle = triangles[i];
 		std::vector<glm::vec3> vertex_normals;
@@ -107,7 +106,7 @@ std::vector<ModelTriangle> loadObjFile(const std::string &filename, float scale,
 	std::vector<TexturePoint> texturePoints;
 	std::unordered_map<std::string, Colour> materials;
 	std::vector<glm::vec3> normals;
-
+	bool mirror = false;
 
 	std::ifstream inputStr(filename, std::ifstream::in);
 	std::string nextLine;
@@ -117,7 +116,8 @@ std::vector<ModelTriangle> loadObjFile(const std::string &filename, float scale,
 		if (vector[0] == "mtllib") {
 			materials = loadMtlFile(vector[1], textures);
 		}else if (vector[0] == "usemtl") {
-			colour =materials[vector[1]];
+			colour = materials[vector[1]];
+			if(vector[1] == "Mirror") mirror = true;
 		}else if (vector[0] == "v") {
 			vertices.push_back(glm::vec3(
 				std::stof(vector[1]) * scale, //string to float
@@ -141,7 +141,7 @@ std::vector<ModelTriangle> loadObjFile(const std::string &filename, float scale,
 			}
 			triangle.colour = colour;
 			triangle.normal = glm::normalize(glm::cross(glm::vec3(triangle.vertices[1] - triangle.vertices[0]), glm::vec3(triangle.vertices[2] - triangle.vertices[0])));
-			
+			triangle.mirror = mirror;
 			faces.push_back(triangle);
 		}else if(vector[0] == "vt") {
 			texturePoints.push_back(TexturePoint(stof(vector[1]), stof(vector[2])));
@@ -268,7 +268,6 @@ void drawTexturedTriangle(DrawingWindow &window, CanvasTriangle triangle, Textur
 
 	for(int i=0; i <= triangle[2].y - triangle[0].y; i++) {
 		float numberOfSteps = std::max(abs(xStart[i].x - xEnd[i].x), 1.0f);
-		// float numberOfSteps = std::max(std::max(abs(xStart[i].x - xEnd[i].x), abs(xStart[i].y - xEnd[i].y)), 1.0f);
 		//interpolate between start and end of rake to find texture point for pixel
 		std :: vector<TexturePoint> texPoints = interpolateRoundPoints(textureStarts[i], textureEnds[i], numberOfSteps + 1);
 		std :: vector<CanvasPoint> points = interpolateRoundPoints(xStart[i], xEnd[i], numberOfSteps + 1);
@@ -362,10 +361,35 @@ bool is_shadow(RayTriangleIntersection intersect, std::vector<ModelTriangle> tri
 	return false;
 }
 
+RayTriangleIntersection getClosestReflection(glm::vec3 inter, glm::vec3 direction, std::vector<ModelTriangle> triangles, int index) {
+	RayTriangleIntersection intersection;
+	intersection.distanceFromCamera = std::numeric_limits<float>::infinity();
+
+	for(int i = 0; i < triangles.size(); i++) {
+		if (i != index){
+			ModelTriangle triangle = triangles[i];
+			glm::vec3 e0 = triangle.vertices[1] - triangle.vertices[0];
+			glm::vec3 e1 = triangle.vertices[2] - triangle.vertices[0];
+			glm::vec3 SPVector = inter - triangle.vertices[0];
+			glm::mat3 de_matrix(-direction, e0, e1); //rayDirection
+			glm::vec3 possibleSolution = glm::inverse(de_matrix) * SPVector;
+			float t = possibleSolution.x, u = possibleSolution.y, v = possibleSolution.z;
+
+			if((u >= 0.0) && (u <= 1.0) && (v >= 0.0) && (v <= 1.0) && (u + v) <= 1.0 && intersection.distanceFromCamera > t && t > 0.0f) { //t > 0.0
+				intersection.distanceFromCamera = t;
+				intersection.intersectedTriangle = triangle;
+			}
+		}
+	}
+	return intersection;
+}
+
 
 RayTriangleIntersection getClosestIntersection(glm::vec3 rayDirection, std::vector<ModelTriangle> triangles) {
 	RayTriangleIntersection intersection;
 	intersection.distanceFromCamera = std::numeric_limits<float>::infinity();
+	float distance = std::numeric_limits<float>::infinity();
+
 	for(int i = 0; i < triangles.size(); i++) {
 		ModelTriangle triangle = triangles[i];
 		glm::vec3 e0 = triangle.vertices[1] - triangle.vertices[0];
@@ -374,11 +398,19 @@ RayTriangleIntersection getClosestIntersection(glm::vec3 rayDirection, std::vect
 		glm::mat3 DEMatrix(-rayDirection, e0, e1);
 		glm::vec3 possibleSolution = glm::inverse(DEMatrix) * SPVector;
 		float t = possibleSolution.x, u = possibleSolution.y, v = possibleSolution.z;
-		if((u >=  0.0) && (u <= 1.0) && (v >= 0.0) && (v <= 1.0) && (u + v) <= 1.0 && t < intersection.distanceFromCamera && t > 0.0) {
-			glm::vec3 point = triangle.vertices[0]+u*e0+v*e1;
-			intersection =  RayTriangleIntersection(point, t, triangle, i);
-			intersection.u = u;
-			intersection.v = v;
+		if((u >=  0.0) && (u <= 1.0) && (v >= 0.0) && (v <= 1.0) && (u + v) <= 1.0 && t < distance && t > 0.0) {
+			glm::vec3 intersect = triangle.vertices[0]+u*e0+v*e1;
+			distance = t;
+			if(triangle.mirror) {
+				glm::vec3 normal = normalize(triangle.normal);
+				glm::vec3 reflection_ray = normalize(rayDirection - (normal * 2.0f * glm::dot(rayDirection, normal)));
+				intersection = getClosestReflection(intersect, reflection_ray, triangles, i);
+				if(isinf(intersection.distanceFromCamera)) intersection.inf = true;
+			} else {
+				intersection =  RayTriangleIntersection(intersect, t, triangle, i);
+				intersection.u = u;
+				intersection.v = v;
+			}
 		}
 	}
 	return intersection;
@@ -506,16 +538,21 @@ void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangles, f
                     uint8_t green = (c >> 8) & 0xff;
                     uint8_t blue = c & 0xff;
 					colour = Colour(red, green, blue);
-
 				}else{
 					colour = intersection.intersectedTriangle.colour;
 				}
+
+				if(intersection.inf) {
+					uint32_t b = (255 << 24) + (0 << 16) + (0 << 8) + 0;
+					window.setPixelColour(x,y,b);
+				}else{
 
 				colour.red *= brightness;
 				colour.green *= brightness;
 				colour.blue *= brightness;
 				uint32_t c = (255 << 24) + (colour.red << 16) + (colour.green << 8) + colour.blue;
 				window.setPixelColour(x, y, c);
+				}
 
 			}
 		}
@@ -621,8 +658,8 @@ int main(int argc, char *argv[]) {
 
 
 
-	// std::vector<ModelTriangle> sphere = loadObjFile("sphere.obj", vertexScale, textures);
-	// triangles.insert(triangles.end(), sphere.begin(), sphere.end());
+	std::vector<ModelTriangle> sphere = loadObjFile("sphere.obj", vertexScale, textures);
+	triangles.insert(triangles.end(), sphere.begin(), sphere.end());
 	// triangles.insert(triangles.end(), logo.begin(), logo.end());
 
 
