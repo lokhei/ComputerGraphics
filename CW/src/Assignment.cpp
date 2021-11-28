@@ -398,8 +398,10 @@ RayTriangleIntersection getClosestReflection(glm::vec3 inter, glm::vec3 directio
 			float t = possibleSolution.x, u = possibleSolution.y, v = possibleSolution.z;
 
 			if((u >= 0.0) && (u <= 1.0) && (v >= 0.0) && (v <= 1.0) && (u + v) <= 1.0 && intersection.distanceFromCamera > t && t > 0.0) {
-				intersection.distanceFromCamera = t;
-				intersection.intersectedTriangle = triangle;
+				glm::vec3 intersect = triangle.vertices[0]+u*e0+v*e1;
+				intersection =  RayTriangleIntersection(intersect, t, triangle, i);
+				intersection.u = u;
+				intersection.v = v;
 			}
 		}
 	}
