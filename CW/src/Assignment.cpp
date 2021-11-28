@@ -25,27 +25,7 @@ glm::vec3 camPos(0.0, 0.0, 4.0);
 glm::vec3 light(1.0, 1.0, 2.0);
 
 
-std::vector<glm::vec3> lights{
-	glm::vec3(-0.2, 1.0, 0.8),
-	glm::vec3(-0.2, 1.0, 1.0),
-	glm::vec3(-0.2, 1.0, 1.2),
-	glm::vec3(0.0, 1.0, 0.8),
-	glm::vec3(0.0, 1.0, 1.0),
-	glm::vec3(0.0, 1.0, 1.2),
-	glm::vec3(0.2, 1.0, 0.8),
-	glm::vec3(0.2, 1.0, 1.0),
-	glm::vec3(0.2, 1.0, 1.2)
-	// glm::vec3 (0.0, 0.85,1.0),
-	// glm::vec3 (0.0,0.55,1.0),
-	// glm::vec3 (0.3,0.85,1.0),
-	// glm::vec3 (-0.3,0.85,1.0),
-	// glm::vec3 (0.3,1.15,1.0),
-	// glm::vec3 (0.3,0.55,1.0),
-	// glm::vec3 (-0.3,0.55,1.0),
-	// glm::vec3 (-0.3,1.15,1.0)
-
-	// glm::vec3(1.0, 2.0, 2.8)
-};
+std::vector<glm::vec3> lights{};
 
 
 // for sphere
@@ -67,7 +47,20 @@ bool incidence = true;
 bool specular = true;
 
 
-
+void initialiseLights(int size){
+	glm::vec3 light(1.0,1.0,1.0);
+	for (int i=0; i<size; i++) {
+		float j = (i + 1) * 0.025;
+		lights.push_back(light + glm::vec3(j, j, j));
+		lights.push_back(light + glm::vec3(j, j, -j));
+		lights.push_back(light + glm::vec3(j, -j, j));
+		lights.push_back(light + glm::vec3(-j, j, j));
+		lights.push_back(light + glm::vec3(j, -j, -j));
+		lights.push_back(light + glm::vec3(-j, j, -j));
+		lights.push_back(light + glm::vec3(-j, -j, j));
+		lights.push_back(light + glm::vec3(-j, -j, -j));
+	}
+}
 
 std::unordered_map<std::string, Colour> loadMtlFile(const std::string &filename, std::unordered_map<std::string, TextureMap> &textures) {
 	std::unordered_map<std::string, Colour> colours;
@@ -457,7 +450,7 @@ float getBrightness(glm::vec3 intersectionPoint, glm::vec3 normal, glm::vec3 lig
 	glm::vec3 angleOfReflection = glm::normalize(lightRay) - ((2.0f*normal)*glm::dot(glm::normalize(lightRay), normal));
 	float specularLight = specular ? std::pow(glm::dot(glm::normalize(angleOfReflection), cameraRay), specularScale) : 0.0; // Specular Lighting
 
-	brightness += std::max(0.0f, specularLight);
+	brightness += std::max(0.0f, specularLight*0.2f);
 	brightness = std::max(0.2f, std::min(1.0f, brightness)); // Ambient Lighting
 
 	return brightness;
@@ -674,6 +667,8 @@ int main(int argc, char *argv[]) {
 	float vertexScale = 0.5;
 	int renderMode = 2;
 	int lightMode = 0;
+
+	initialiseLights(3);
 
 	std::unordered_map<std::string, TextureMap> textures;
 	
