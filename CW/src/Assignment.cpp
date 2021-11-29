@@ -49,17 +49,18 @@ bool specular = true;
 
 void initialiseLights(int size){
 	glm::vec3 light(1.0,1.0,1.0);
-	for (int i=0; i<size; i++) {
-		float j = (i + 1) * 0.025;
-		lights.push_back(light + glm::vec3(j, j, j));
-		lights.push_back(light + glm::vec3(j, j, -j));
-		lights.push_back(light + glm::vec3(j, -j, j));
-		lights.push_back(light + glm::vec3(-j, j, j));
-		lights.push_back(light + glm::vec3(j, -j, -j));
-		lights.push_back(light + glm::vec3(-j, j, -j));
-		lights.push_back(light + glm::vec3(-j, -j, j));
-		lights.push_back(light + glm::vec3(-j, -j, -j));
-	}
+	lights.push_back(light);
+	// for (int i=0; i<size; i++) {
+	// 	float j = (i + 1) * 0.025;
+	// 	lights.push_back(light + glm::vec3(j, j, j));
+	// 	lights.push_back(light + glm::vec3(j, j, -j));
+	// 	lights.push_back(light + glm::vec3(j, -j, j));
+	// 	lights.push_back(light + glm::vec3(-j, j, j));
+	// 	lights.push_back(light + glm::vec3(j, -j, -j));
+	// 	lights.push_back(light + glm::vec3(-j, j, -j));
+	// 	lights.push_back(light + glm::vec3(-j, -j, j));
+	// 	lights.push_back(light + glm::vec3(-j, -j, -j));
+	// }
 }
 
 std::unordered_map<std::string, Colour> loadMtlFile(const std::string &filename, std::unordered_map<std::string, TextureMap> &textures) {
@@ -308,7 +309,7 @@ void drawTexturedTriangle(DrawingWindow &window, CanvasTriangle triangle, Textur
 
 
 CanvasPoint getCanvasIntersectionPoint(DrawingWindow &window, glm::vec3 vertexPosition, float focalLength){
-	glm::vec3 vertex = (vertexPosition - camPos) * camOrientation;
+	glm::vec3 vertex = (vertexPosition - camPos) * camOrientation; //camera co-ordinate system
 	float u = -round(planeMultiplier*focalLength * (vertex.x / vertex.z)) + (window.width / 2);
 	float v = round(planeMultiplier*focalLength * (vertex.y / vertex.z)) + (window.height / 2);
 	float z = vertex.z;
@@ -334,7 +335,8 @@ glm::mat3 rotateX(float angle) {
 
 
 
-void lookAt( glm::vec3 lookAtPoint) {
+void lookAt() {
+	glm::vec3 lookAtPoint(0, 0, 0);
 	glm::vec3 forward = glm::normalize(camPos - lookAtPoint);
 	glm::vec3 right = glm::normalize(glm::cross(glm::vec3(0, 1, 0), forward));
 	glm::vec3 up = glm::normalize(glm::cross(forward, right));
@@ -344,8 +346,8 @@ void lookAt( glm::vec3 lookAtPoint) {
 
 void orbit(bool orb){ 
 	if (orb){
-		camPos = camPos * rotateY(-0.1);
-		lookAt(glm::vec3(0, 0, 0));
+		camPos =  rotateY(-0.1) * camPos;
+		lookAt();
 	}	
 }
 
@@ -441,7 +443,9 @@ float getBrightness(glm::vec3 intersectionPoint, glm::vec3 normal, glm::vec3 lig
 	glm::vec3 lightRay = light - intersectionPoint;
 	float length = glm::length(lightRay);
 
-	glm::vec3 cameraRay = glm::normalize((camPos * camOrientation) - intersectionPoint);
+	glm::vec3 cameraRay = glm::normalize(camOrientation * (camPos - intersectionPoint)); //which way round?????
+	// std::cout << cameraRay[2] << std::endl;
+
 
 	float brightness = proximity ? intensity/(4 * M_PI * length*length) : 1.0; // Proximity lighting
 	float angleOfIncidence = incidence ? glm::dot(glm::normalize(lightRay), normal) : 1.0; // Angle of Incidence Lighting
@@ -462,7 +466,7 @@ float gouraud(RayTriangleIntersection intersection, glm::vec3 light) {
 
 	glm::vec3 lightRay = light - intersection.intersectionPoint;
 	float length = glm::length(lightRay);
-	glm::vec3 cameraRay = glm::normalize((camPos * camOrientation) - intersection.intersectionPoint);
+	glm::vec3 cameraRay = glm::normalize(camOrientation * (camPos - intersection.intersectionPoint));
 
 	ModelTriangle triangle = intersection.intersectedTriangle;
 	
@@ -494,7 +498,8 @@ float phong(RayTriangleIntersection intersection, glm::vec3 light) {
 
 	glm::vec3 lightRay = light - intersection.intersectionPoint;
 	float length = glm::length(lightRay);
-	glm::vec3 cameraRay = glm::normalize((camPos * camOrientation) - intersection.intersectionPoint);
+	glm::vec3 cameraRay = glm::normalize(camOrientation * (camPos - intersection.intersectionPoint));
+
 
 	ModelTriangle triangle = intersection.intersectedTriangle;
 	//interpolated normals
@@ -519,8 +524,10 @@ void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangles, f
 	orbit(orbiting); 
 	for(int x = 0; x < window.width; x++) {
 		for(int y = 0; y < window.height; y++) {
-			glm::vec3 direction = glm::vec3(int(window.width / 2) - x, y - int(window.height / 2), focalLength*planeMultiplier);
-			glm::vec3 ray = normalize(camOrientation * (camPos-direction));
+			// do we need to take awat camPos ????
+			glm::vec3 direction(-(float(window.width / 2) - x) / planeMultiplier, (float(window.height / 2) - y) / planeMultiplier, -2);;
+			//direction = glm::vec3(int(window.width / 2) - x, y - int(window.height / 2), focalLength*planeMultiplier);
+			glm::vec3 ray = normalize(camOrientation * (direction));
 			RayTriangleIntersection intersection = getClosestIntersection(ray, triangles);
 
 			Colour colour;
@@ -627,15 +634,17 @@ void handleEvent(SDL_Event event, DrawingWindow &window, int &renderMode, int &l
 		else if (event.key.keysym.sym == SDLK_d) camPos.x += 0.1; //right
 		else if (event.key.keysym.sym == SDLK_a) camPos.x -= 0.1; //left
 		//rotation
-		else if (event.key.keysym.sym == SDLK_UP) camPos = camPos * rotateY(0.1); //rotate Y C
-		else if (event.key.keysym.sym == SDLK_RIGHT) camPos = camPos * rotateX(0.1); //rotate X C
-		else if (event.key.keysym.sym == SDLK_DOWN) camPos = camPos * rotateY(-0.1); //rotate Y antiC
-		else if (event.key.keysym.sym == SDLK_LEFT) camPos = camPos * rotateX(-0.1); //rotate X antiC
+
+		// order of matrix mult ??????
+		else if (event.key.keysym.sym == SDLK_UP) camPos = rotateY(0.1) * camPos; //rotate Y C
+		else if (event.key.keysym.sym == SDLK_RIGHT) camPos = rotateX(0.1) * camPos; //rotate X C
+		else if (event.key.keysym.sym == SDLK_DOWN) camPos = rotateY(-0.1) * camPos; //rotate Y antiC
+		else if (event.key.keysym.sym == SDLK_LEFT) camPos = rotateX(-0.1) * camPos; //rotate X antiC
 		//orientation
-		else if (event.key.keysym.sym == SDLK_i) camOrientation = camOrientation * rotateY(0.1); //panning
-		else if (event.key.keysym.sym == SDLK_k) camOrientation = camOrientation * rotateY(-0.1);
-		else if (event.key.keysym.sym == SDLK_l) camOrientation = camOrientation * rotateX(0.1); //tilting
-		else if (event.key.keysym.sym == SDLK_j) camOrientation = camOrientation * rotateX(-0.1);
+		else if (event.key.keysym.sym == SDLK_i) camOrientation = rotateY(0.1) * camOrientation ; //panning
+		else if (event.key.keysym.sym == SDLK_k) camOrientation = rotateY(-0.1) * camOrientation;
+		else if (event.key.keysym.sym == SDLK_l) camOrientation = rotateX(0.1) * camOrientation; //tilting
+		else if (event.key.keysym.sym == SDLK_j) camOrientation = rotateX(-0.1) * camOrientation;
 
 		//orbit
 		else if (event.key.keysym.sym == SDLK_o) orbiting = (orbiting) ? false : true;
