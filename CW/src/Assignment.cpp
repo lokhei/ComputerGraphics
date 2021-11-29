@@ -633,18 +633,35 @@ void handleEvent(SDL_Event event, DrawingWindow &window, int &renderMode, int &l
 		else if (event.key.keysym.sym == SDLK_s) camPos.z += 0.1; //backwards
 		else if (event.key.keysym.sym == SDLK_d) camPos.x += 0.1; //right
 		else if (event.key.keysym.sym == SDLK_a) camPos.x -= 0.1; //left
+		// Order of transformation is matrix * vector
 		//rotation
-
-		// order of matrix mult ??????
-		else if (event.key.keysym.sym == SDLK_UP) camPos = rotateY(0.1) * camPos; //rotate Y C
-		else if (event.key.keysym.sym == SDLK_RIGHT) camPos = rotateX(0.1) * camPos; //rotate X C
-		else if (event.key.keysym.sym == SDLK_DOWN) camPos = rotateY(-0.1) * camPos; //rotate Y antiC
-		else if (event.key.keysym.sym == SDLK_LEFT) camPos = rotateX(-0.1) * camPos; //rotate X antiC
-		//orientation
-		else if (event.key.keysym.sym == SDLK_i) camOrientation = rotateY(0.1) * camOrientation ; //panning
-		else if (event.key.keysym.sym == SDLK_k) camOrientation = rotateY(-0.1) * camOrientation;
-		else if (event.key.keysym.sym == SDLK_l) camOrientation = rotateX(0.1) * camOrientation; //tilting
-		else if (event.key.keysym.sym == SDLK_j) camOrientation = rotateX(-0.1) * camOrientation;
+		else if (event.key.keysym.sym == SDLK_UP) {
+			camPos = rotateY(0.1) * camPos; //rotate Y C
+			lookAt();
+		}else if (event.key.keysym.sym == SDLK_RIGHT){
+			camPos = rotateX(0.1) * camPos; //rotate X C
+			lookAt();
+		}else if (event.key.keysym.sym == SDLK_DOWN){
+			camPos = rotateY(-0.1) * camPos; //rotate Y antiC
+			lookAt();
+		}
+		else if (event.key.keysym.sym == SDLK_LEFT){
+			camPos = rotateX(-0.1) * camPos; //rotate X antiC
+			lookAt();
+		}//orientation
+		else if (event.key.keysym.sym == SDLK_i){
+			camOrientation = rotateY(0.1) * camOrientation ; //panning
+			lookAt();
+		}else if (event.key.keysym.sym == SDLK_k){
+			camOrientation = rotateY(-0.1) * camOrientation;
+			lookAt();
+		}else if (event.key.keysym.sym == SDLK_l){
+			camOrientation = rotateX(0.1) * camOrientation; //tilting
+			lookAt();
+		}else if (event.key.keysym.sym == SDLK_j){
+			camOrientation = rotateX(-0.1) * camOrientation;
+			lookAt();
+		}
 
 		//orbit
 		else if (event.key.keysym.sym == SDLK_o) orbiting = (orbiting) ? false : true;
