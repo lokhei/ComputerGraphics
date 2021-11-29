@@ -48,19 +48,19 @@ bool specular = true;
 
 
 void initialiseLights(int size){
-	glm::vec3 light(1.0,1.0,1.0);
+	glm::vec3 light(0.0,1.0,0.5);
 	lights.push_back(light);
-	// for (int i=0; i<size; i++) {
-	// 	float j = (i + 1) * 0.025;
-	// 	lights.push_back(light + glm::vec3(j, j, j));
-	// 	lights.push_back(light + glm::vec3(j, j, -j));
-	// 	lights.push_back(light + glm::vec3(j, -j, j));
-	// 	lights.push_back(light + glm::vec3(-j, j, j));
-	// 	lights.push_back(light + glm::vec3(j, -j, -j));
-	// 	lights.push_back(light + glm::vec3(-j, j, -j));
-	// 	lights.push_back(light + glm::vec3(-j, -j, j));
-	// 	lights.push_back(light + glm::vec3(-j, -j, -j));
-	// }
+	for (int i=0; i<size; i++) {
+		float j = (i + 1) * 0.025;
+		lights.push_back(light + glm::vec3(j, j, j));
+		lights.push_back(light + glm::vec3(j, j, -j));
+		lights.push_back(light + glm::vec3(j, -j, j));
+		lights.push_back(light + glm::vec3(-j, j, j));
+		lights.push_back(light + glm::vec3(j, -j, -j));
+		lights.push_back(light + glm::vec3(-j, j, -j));
+		lights.push_back(light + glm::vec3(-j, -j, j));
+		lights.push_back(light + glm::vec3(-j, -j, -j));
+	}
 }
 
 std::unordered_map<std::string, Colour> loadMtlFile(const std::string &filename, std::unordered_map<std::string, TextureMap> &textures) {
@@ -219,7 +219,7 @@ void sortTriangle(CanvasTriangle &triangle){
 }
 
 void drawLine(DrawingWindow &window, CanvasPoint from, CanvasPoint to, Colour colour, std::vector<std::vector<float>> &depthBuffer) {
-	float numberOfSteps = std::max(std::max(abs(to.x - from.x), abs(to.y - from.y)), 1.0f);
+	float numberOfSteps = fmax(fmax(abs(to.x - from.x), abs(to.y - from.y)), 1.0f);
 	std :: vector<CanvasPoint> points = interpolateRoundPoints(from, to, numberOfSteps + 1);
 	for (int i=0; i<numberOfSteps; i++) {
 		int x = points[i].x;
@@ -283,7 +283,7 @@ void drawTexturedTriangle(DrawingWindow &window, CanvasTriangle triangle, Textur
 	std :: vector<TexturePoint> textureEnds = interpolateRoundPoints(triangle[0].texturePoint, triangle[2].texturePoint, triangle[2].y - triangle[0].y + 1);
 
 	for(int i=0; i <= triangle[2].y - triangle[0].y; i++) {
-		float numberOfSteps = std::max(abs(xStart[i].x - xEnd[i].x), 1.0f);
+		float numberOfSteps = fmax(abs(xStart[i].x - xEnd[i].x), 1.0f);
 		//interpolate between start and end of rake to find texture point for pixel
 		std :: vector<TexturePoint> texPoints = interpolateRoundPoints(textureStarts[i], textureEnds[i], numberOfSteps + 1);
 		std :: vector<CanvasPoint> points = interpolateRoundPoints(xStart[i], xEnd[i], numberOfSteps + 1);
@@ -443,9 +443,7 @@ float getBrightness(glm::vec3 intersectionPoint, glm::vec3 normal, glm::vec3 lig
 	glm::vec3 lightRay = light - intersectionPoint;
 	float length = glm::length(lightRay);
 
-	glm::vec3 cameraRay = glm::normalize(camOrientation * (camPos - intersectionPoint)); //which way round?????
-	// std::cout << cameraRay[2] << std::endl;
-
+	glm::vec3 cameraRay = glm::normalize(camOrientation * (camPos - intersectionPoint));
 
 	float brightness = proximity ? intensity/(4 * M_PI * length*length) : 1.0; // Proximity lighting
 	float angleOfIncidence = incidence ? glm::dot(glm::normalize(lightRay), normal) : 1.0; // Angle of Incidence Lighting
@@ -524,10 +522,8 @@ void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangles, f
 	orbit(orbiting); 
 	for(int x = 0; x < window.width; x++) {
 		for(int y = 0; y < window.height; y++) {
-			// do we need to take awat camPos ????
-			glm::vec3 direction(-(float(window.width / 2) - x) / planeMultiplier, (float(window.height / 2) - y) / planeMultiplier, -2);;
-			//direction = glm::vec3(int(window.width / 2) - x, y - int(window.height / 2), focalLength*planeMultiplier);
-			glm::vec3 ray = normalize(camOrientation * (direction));
+			glm::vec3 direction(x-float(window.width / 2), float(window.height / 2) - y, -focalLength*planeMultiplier);;
+			glm::vec3 ray = normalize(camOrientation * (direction-camPos));
 			RayTriangleIntersection intersection = getClosestIntersection(ray, triangles);
 
 			Colour colour;
@@ -651,16 +647,12 @@ void handleEvent(SDL_Event event, DrawingWindow &window, int &renderMode, int &l
 		}//orientation
 		else if (event.key.keysym.sym == SDLK_i){
 			camOrientation = rotateY(0.1) * camOrientation ; //panning
-			lookAt();
 		}else if (event.key.keysym.sym == SDLK_k){
 			camOrientation = rotateY(-0.1) * camOrientation;
-			lookAt();
 		}else if (event.key.keysym.sym == SDLK_l){
 			camOrientation = rotateX(0.1) * camOrientation; //tilting
-			lookAt();
 		}else if (event.key.keysym.sym == SDLK_j){
 			camOrientation = rotateX(-0.1) * camOrientation;
-			lookAt();
 		}
 
 		//orbit
@@ -691,21 +683,21 @@ int main(int argc, char *argv[]) {
 	SDL_Event event;
 
 	float vertexScale = 0.5;
-	int renderMode = 2;
+	int renderMode = 1;
 	int lightMode = 0;
 
 	initialiseLights(3);
 
 	std::unordered_map<std::string, TextureMap> textures;
 	
-	// std::vector<ModelTriangle> triangles = loadObjFile("logo.obj", 0.003, textures);
+	std::vector<ModelTriangle> triangles = loadObjFile("logo.obj", 0.003, textures);
 	// std::vector<ModelTriangle> triangles = loadObjFile("textured-cornell-box.obj", vertexScale, textures);
-	std::vector<ModelTriangle> triangles = loadObjFile("cornell-box.obj", vertexScale, textures);
+	// std::vector<ModelTriangle> triangles = loadObjFile("cornell-box.obj", vertexScale, textures);
 
 
 
-	std::vector<ModelTriangle> sphere = loadObjFile("sphere.obj", vertexScale, textures);
-	triangles.insert(triangles.end(), sphere.begin(), sphere.end());
+	 //std::vector<ModelTriangle> triangles = loadObjFile("sphere2.obj", vertexScale, textures);
+	// triangles.insert(triangles.end(), sphere.begin(), sphere.end());
 	// triangles.insert(triangles.end(), logo.begin(), logo.end());
 
 	float focalLength = 2.0;
