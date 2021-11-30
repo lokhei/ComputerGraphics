@@ -29,7 +29,10 @@ std::vector<glm::vec3> lights{};
 
 
 // for sphere
-// glm::vec3 camPos(0.0, 1.3, 3.5);
+// glm::vec3 camPos(0.0, 1.3, 2.5);
+// glm::vec3 light(1.0, 2.0, 2.8);
+
+// for high res sphere
 // glm::vec3 light(1.0, 2.0, 2.8);
 
 glm::mat3 camOrientation(
@@ -48,6 +51,8 @@ bool specular = true;
 
 
 void initialiseLights(int size){
+	// glm::vec3 light(1.0, 1.3, 2.8);  //sphere
+
 	glm::vec3 light(0.0,1.0,0.5);
 	lights.push_back(light);
 	for (int i=0; i<size; i++) {
@@ -133,6 +138,7 @@ std::vector<ModelTriangle> loadObjFile(const std::string &filename, float scale,
 			materials = loadMtlFile(vector[1], textures);
 		}else if (vector[0] == "usemtl") {
 			colour = materials[vector[1]];
+			std::cout << colour;
 			if(vector[1] == "Mirror") mirror = true;
 		}else if (vector[0] == "v") {
 			vertices.push_back(glm::vec3(
@@ -541,7 +547,7 @@ void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangles, f
 							brightness += phong(intersection, lights[i]);
 						}
 					}else{
-						brightness += 0.15; //shadow brightness
+						brightness += 0.18	; //shadow brightness
 					}
 				}
 				brightness /= lights.size();
@@ -696,13 +702,15 @@ int main(int argc, char *argv[]) {
 
 	std::unordered_map<std::string, TextureMap> textures;
 	
-	std::vector<ModelTriangle> triangles = loadObjFile("logo.obj", 0.003, textures);
-	// std::vector<ModelTriangle> triangles = loadObjFile("textured-cornell-box.obj", vertexScale, textures);
+	// std::vector<ModelTriangle> triangles = loadObjFile("logo.obj", 0.003, textures);
+	std::vector<ModelTriangle> triangles = loadObjFile("textured-cornell-box.obj", vertexScale, textures);
 	// std::vector<ModelTriangle> triangles = loadObjFile("cornell-box.obj", vertexScale, textures);
 
 
 
-	 //std::vector<ModelTriangle> triangles = loadObjFile("sphere2.obj", vertexScale, textures);
+	// std::vector<ModelTriangle> triangles = loadObjFile("high-res-sphere.obj", 0.3, textures);
+	//  std::vector<ModelTriangle> triangles = loadObjFile("sphere.obj", vertexScale, textures);
+
 	// triangles.insert(triangles.end(), sphere.begin(), sphere.end());
 	// triangles.insert(triangles.end(), logo.begin(), logo.end());
 
