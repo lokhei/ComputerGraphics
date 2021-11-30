@@ -604,8 +604,14 @@ void drawRasterisedScene(DrawingWindow &window, std::vector<ModelTriangle> faces
 			TextureMap texture(face.colour.name);
 			for(int j = 0; j < triangle.vertices.size(); j++) {
 				triangle.vertices[j].texturePoint = face.texturePoints[j];
-				triangle.vertices[j].texturePoint.x = fmod(triangle.vertices[j].texturePoint.x, 1 ) * texture.width;
-				triangle.vertices[j].texturePoint.y = texture.height-fmod(triangle.vertices[j].texturePoint.y, 1) * texture.height;
+				if (triangle.vertices[j].texturePoint.x != 1.0f){
+					triangle.vertices[j].texturePoint.x=fmod(triangle.vertices[j].texturePoint.x, 1.0f);
+				}
+				triangle.vertices[j].texturePoint.x = triangle.vertices[j].texturePoint.x * texture.width;
+				if (triangle.vertices[j].texturePoint.y != 1.0f){
+					triangle.vertices[j].texturePoint.y = fmod(triangle.vertices[j].texturePoint.y, 1.0f);
+				}
+				triangle.vertices[j].texturePoint.y = texture.height-triangle.vertices[j].texturePoint.y * texture.height;
 			}
 			drawTexturedTriangle(window, triangle, texture, depthBuffer);
 		}
