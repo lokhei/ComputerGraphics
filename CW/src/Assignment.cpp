@@ -18,6 +18,11 @@
 
 #define WIDTH 640
 #define HEIGHT 480
+#define GLASS_REFRACTIVE_INDEX 1.3  // refractive index of glass is 1.3
+
+
+
+RayTriangleIntersection getClosestRefraction(glm::vec3 inter, glm::vec3 direction, std::vector<ModelTriangle> triangles, int index);
 
 bool orbiting = false;
 
@@ -55,17 +60,17 @@ void initialiseLights(int size){
 
 	glm::vec3 light(0.0,1.0,0.5);
 	lights.push_back(light);
-	for (int i=0; i<size; i++) {
-		float j = (i + 1) * 0.025;
-		lights.push_back(light + glm::vec3(j, j, j));
-		lights.push_back(light + glm::vec3(j, j, -j));
-		lights.push_back(light + glm::vec3(j, -j, j));
-		lights.push_back(light + glm::vec3(-j, j, j));
-		lights.push_back(light + glm::vec3(j, -j, -j));
-		lights.push_back(light + glm::vec3(-j, j, -j));
-		lights.push_back(light + glm::vec3(-j, -j, j));
-		lights.push_back(light + glm::vec3(-j, -j, -j));
-	}
+	// for (int i=0; i<size; i++) {
+	// 	float j = (i + 1) * 0.025;
+	// 	lights.push_back(light + glm::vec3(j, j, j));
+	// 	lights.push_back(light + glm::vec3(j, j, -j));
+	// 	lights.push_back(light + glm::vec3(j, -j, j));
+	// 	lights.push_back(light + glm::vec3(-j, j, j));
+	// 	lights.push_back(light + glm::vec3(j, -j, -j));
+	// 	lights.push_back(light + glm::vec3(-j, j, -j));
+	// 	lights.push_back(light + glm::vec3(-j, -j, j));
+	// 	lights.push_back(light + glm::vec3(-j, -j, -j));
+	// }
 }
 
 std::unordered_map<std::string, Colour> loadMtlFile(const std::string &filename, std::unordered_map<std::string, TextureMap> &textures) {
@@ -128,6 +133,8 @@ std::vector<ModelTriangle> loadObjFile(const std::string &filename, float scale,
 	std::unordered_map<std::string, Colour> materials;
 	std::vector<glm::vec3> normals;
 	bool mirror = false;
+	bool refract = false;
+
 
 	std::ifstream inputStr(filename, std::ifstream::in);
 	std::string nextLine;
@@ -138,8 +145,8 @@ std::vector<ModelTriangle> loadObjFile(const std::string &filename, float scale,
 			materials = loadMtlFile(vector[1], textures);
 		}else if (vector[0] == "usemtl") {
 			colour = materials[vector[1]];
-			std::cout << colour;
 			if(vector[1] == "Mirror") mirror = true;
+			if(vector[1] == "Glass") refract = true;
 		}else if (vector[0] == "v") {
 			vertices.push_back(glm::vec3(
 				std::stof(vector[1]) * scale, //string to float
@@ -164,6 +171,7 @@ std::vector<ModelTriangle> loadObjFile(const std::string &filename, float scale,
 			triangle.colour = colour;
 			triangle.normal = glm::normalize(glm::cross(glm::vec3(triangle.vertices[1] - triangle.vertices[0]), glm::vec3(triangle.vertices[2] - triangle.vertices[0])));
 			triangle.mirror = mirror;
+			triangle.refract = refract;
 			faces.push_back(triangle);
 		}else if(vector[0] == "vt") {
 			texturePoints.push_back(TexturePoint(stof(vector[1]), stof(vector[2])));
@@ -288,13 +296,13 @@ void drawTexturedTriangle(DrawingWindow &window, CanvasTriangle triangle, Textur
 	}
 	std :: vector<TexturePoint> textureEnds = interpolateRoundPoints(triangle[0].texturePoint, triangle[2].texturePoint, triangle[2].y - triangle[0].y + 1);
 
-	for(int i=0; i <= triangle[2].y - triangle[0].y; i++) {
+	for(int i=0; i < triangle[2].y - triangle[0].y + 1; i++) {
 		float numberOfSteps = fmax(abs(xStart[i].x - xEnd[i].x), 1.0f);
 		//interpolate between start and end of rake to find texture point for pixel
 		std :: vector<TexturePoint> texPoints = interpolateRoundPoints(textureStarts[i], textureEnds[i], numberOfSteps + 1);
 		std :: vector<CanvasPoint> points = interpolateRoundPoints(xStart[i], xEnd[i], numberOfSteps + 1);
 
-		for (float j=0.0; j <= numberOfSteps; j++) {
+		for (float j=0.0; j < numberOfSteps + 1; j++) {
 			int x = round(points[j].x);
 			int y = round(points[j].y);
 			if(x >= 0 && x < window.width && y >= 0 && y < window.height) {
@@ -383,13 +391,77 @@ bool is_shadow(RayTriangleIntersection intersect, std::vector<ModelTriangle> tri
 	}
 	return false;
 }
+glm::vec3 refract(glm::vec3 incidence, glm::vec3 n, float refractiveIndex) {
+
+    float refrInd1 = refractiveIndex; //refractive index of glass
+    float refrInd2 = 1; //refractive index of air
+    float cos_theta = glm::dot(n, incidence); //N . I
+	float sin_theta = 1 - pow(cos_theta, 2);
+    if (cos_theta < 0) {
+        // outside surface
+        cos_theta = -cos_theta; // make cos_theta +ve
+    } else {
+        // inside surface
+        std::swap(refrInd1, refrInd2); //swap indices
+        n = -n; //reverese normal direction
+    }
+    float refrRatio = refrInd1 / refrInd2;
+	float c_2 = 1 - pow(refrRatio,2) * sin_theta;
+	if(c_2 < 0) { //total internal refraction
+		return normalize(incidence - (n * 2.0f * sin_theta)); // return reflected ray
+
+	}
+    glm::vec3 refracted_ray = refrRatio * incidence + (refrRatio * cos_theta - sqrtf(c_2)) * n;
+    return normalize(refracted_ray);
+}
+
 
 RayTriangleIntersection getClosestReflection(glm::vec3 inter, glm::vec3 direction, std::vector<ModelTriangle> triangles, int index) {
+	RayTriangleIntersection intersection;
+	intersection.distanceFromCamera = std::numeric_limits<float>::infinity();
+			
+	for(int i = 0; i < triangles.size(); i++) {
+		if (i != index){
+			ModelTriangle triangle = triangles[i];
+			glm::vec3 e0 = triangle.vertices[1] - triangle.vertices[0];
+			glm::vec3 e1 = triangle.vertices[2] - triangle.vertices[0];
+			glm::vec3 SPVector = inter - triangle.vertices[0];
+			glm::mat3 DEMatrix(-direction, e0, e1);
+			glm::vec3 possibleSolution = glm::inverse(DEMatrix) * SPVector;
+			float t = possibleSolution.x, u = possibleSolution.y, v = possibleSolution.z;
+			if((u >= 0.0) && (u <= 1.0) && (v >= 0.0) && (v <= 1.0) && (u + v) <= 1.0 && intersection.distanceFromCamera > t && t > 0.0) {
+				glm::vec3 intersect = triangle.vertices[0]+u*e0+v*e1;
+				intersection.intersectionPoint = intersect;
+				intersection.distanceFromCamera = t;
+				intersection.intersectedTriangle = triangle;
+				intersection.triangleIndex = i;
+				intersection.u = u;
+				intersection.v = v;
+			}
+		}
+	}
+	if(intersection.intersectedTriangle.mirror) {
+		glm::vec3 normal = normalize(intersection.intersectedTriangle.normal);
+		glm::vec3 reflection_ray = normalize(direction - (normal * 2.0f * dot(direction, normal)));
+		intersection = getClosestReflection(intersection.intersectionPoint, reflection_ray, triangles, intersection.triangleIndex);
+	} 
+	else if(intersection.intersectedTriangle.refract) {
+		glm::vec3 normal = normalize(intersection.intersectedTriangle.normal);
+		glm::vec3 refracted_ray = refract(direction, normal, GLASS_REFRACTIVE_INDEX);
+		intersection = getClosestRefraction(intersection.intersectionPoint, refracted_ray, triangles, intersection.triangleIndex);
+	}
+	return intersection;
+}
+
+
+
+RayTriangleIntersection getClosestRefraction(glm::vec3 inter, glm::vec3 direction, std::vector<ModelTriangle> triangles, int index) {
 	RayTriangleIntersection intersection;
 	intersection.distanceFromCamera = std::numeric_limits<float>::infinity();
 
 	for(int i = 0; i < triangles.size(); i++) {
 		if (i != index){
+
 			ModelTriangle triangle = triangles[i];
 			glm::vec3 e0 = triangle.vertices[1] - triangle.vertices[0];
 			glm::vec3 e1 = triangle.vertices[2] - triangle.vertices[0];
@@ -400,15 +472,28 @@ RayTriangleIntersection getClosestReflection(glm::vec3 inter, glm::vec3 directio
 
 			if((u >= 0.0) && (u <= 1.0) && (v >= 0.0) && (v <= 1.0) && (u + v) <= 1.0 && intersection.distanceFromCamera > t && t > 0.0) {
 				glm::vec3 intersect = triangle.vertices[0]+u*e0+v*e1;
-				intersection =  RayTriangleIntersection(intersect, t, triangle, i);
+				intersection.intersectionPoint = intersect;
+				intersection.distanceFromCamera = t;
+				intersection.intersectedTriangle = triangle;
+				intersection.triangleIndex = i;
 				intersection.u = u;
 				intersection.v = v;
+				
 			}
 		}
 	}
+	if(intersection.intersectedTriangle.refract) {
+		glm::vec3 normal = normalize(intersection.intersectedTriangle.normal);
+		glm::vec3 refracted_ray = refract(direction, normal, GLASS_REFRACTIVE_INDEX);
+		intersection = getClosestRefraction(intersection.intersectionPoint, refracted_ray, triangles, intersection.triangleIndex);
+	}
+	else if(intersection.intersectedTriangle.mirror) {
+		glm::vec3 normal = normalize(intersection.intersectedTriangle.normal);
+		glm::vec3 reflection_ray = normalize(direction - (normal * 2.0f * dot(direction, normal)));
+		intersection = getClosestReflection(intersection.intersectionPoint, reflection_ray, triangles, intersection.triangleIndex);
+	} 
 	return intersection;
 }
-
 
 RayTriangleIntersection getClosestIntersection(glm::vec3 rayDirection, std::vector<ModelTriangle> triangles) {
 	RayTriangleIntersection intersection;
@@ -430,8 +515,11 @@ RayTriangleIntersection getClosestIntersection(glm::vec3 rayDirection, std::vect
 				glm::vec3 normal = normalize(triangle.normal);
 				glm::vec3 reflection_ray = normalize(rayDirection - (normal * 2.0f * glm::dot(rayDirection, normal)));
 				intersection = getClosestReflection(intersect, reflection_ray, triangles, i);
-				if(isinf(intersection.distanceFromCamera)) intersection.inf = true;
-			} else {
+			} else if(triangle.refract) {
+					glm::vec3 normal = normalize(triangle.normal);
+					glm::vec3 refracted_ray = refract(rayDirection, normal, GLASS_REFRACTIVE_INDEX);
+					intersection = getClosestRefraction(intersect, refracted_ray, triangles, i);
+			}else {
 				intersection =  RayTriangleIntersection(intersect, t, triangle, i);
 				intersection.u = u;
 				intersection.v = v;
@@ -537,18 +625,26 @@ void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangles, f
 			if(!isinf(intersection.distanceFromCamera)) {
 				float brightness = 0;
 				for (int i = 0; i < lights.size(); i++) {
+					float currentBrightness = 0;
 					if(!is_shadow(intersection, triangles, lights[i])){
 						if (lightMode == 0){
 							glm::vec3 normal = intersection.intersectedTriangle.normal;
-							brightness += getBrightness(intersection.intersectionPoint, normal, lights[i]);
+							currentBrightness = getBrightness(intersection.intersectionPoint, normal, lights[i]);
 						}else if (lightMode == 1){
-							brightness += gouraud(intersection, lights[i]);
+							currentBrightness = gouraud(intersection, lights[i]);
 						}else {
-							brightness += phong(intersection, lights[i]);
+							currentBrightness = phong(intersection, lights[i]);
 						}
 					}else{
-						brightness += 0.18	; //shadow brightness
+						currentBrightness = intersection.intersectedTriangle.refract ? 0.3 : 0.18	; //shadow brightness ????
+						// brightness +=  0.18	; //shadow brightness
+
 					}
+					if (intersection.intersectedTriangle.refract) {
+						currentBrightness *= 0.2;
+						std::cout << "hi";
+					}
+					brightness += currentBrightness;
 				}
 				brightness /= lights.size();
 				
@@ -570,9 +666,6 @@ void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangles, f
 					colour = intersection.intersectedTriangle.colour;
 				}
 
-				if(intersection.inf) {
-					colour = Colour(0, 0, 0);
-				}
 
 				colour.red *= brightness;
 				colour.green *= brightness;
@@ -703,8 +796,8 @@ int main(int argc, char *argv[]) {
 	std::unordered_map<std::string, TextureMap> textures;
 	
 	// std::vector<ModelTriangle> triangles = loadObjFile("logo.obj", 0.003, textures);
-	std::vector<ModelTriangle> triangles = loadObjFile("textured-cornell-box.obj", vertexScale, textures);
-	// std::vector<ModelTriangle> triangles = loadObjFile("cornell-box.obj", vertexScale, textures);
+	// std::vector<ModelTriangle> triangles = loadObjFile("textured-cornell-box.obj", vertexScale, textures);
+	std::vector<ModelTriangle> triangles = loadObjFile("cornell-box.obj", vertexScale, textures);
 
 
 

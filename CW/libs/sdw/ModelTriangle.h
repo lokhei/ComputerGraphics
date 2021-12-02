@@ -13,6 +13,8 @@ struct ModelTriangle {
 	glm::vec3 normal{};
 	std::array<glm::vec3, 3> vertexNormals{};
 	bool mirror = false;
+	bool refract = false;
+
 
 
 	ModelTriangle();
