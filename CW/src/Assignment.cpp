@@ -392,9 +392,9 @@ bool is_shadow(RayTriangleIntersection intersect, std::vector<ModelTriangle> tri
 	return false;
 }
 glm::vec3 refract(glm::vec3 incidence, glm::vec3 n, float refractiveIndex) {
-
-    float refrInd1 = refractiveIndex; //refractive index of glass
-    float refrInd2 = 1; //refractive index of air
+	
+    float refrInd1 = 1; //refractive index of air
+    float refrInd2 = refractiveIndex; //refractive index of glass
     float cos_theta = glm::dot(n, incidence); //N . I
 	float sin_theta = 1 - pow(cos_theta, 2);
     if (cos_theta < 0) {
