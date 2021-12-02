@@ -145,8 +145,8 @@ std::vector<ModelTriangle> loadObjFile(const std::string &filename, float scale,
 			materials = loadMtlFile(vector[1], textures);
 		}else if (vector[0] == "usemtl") {
 			colour = materials[vector[1]];
-			if(vector[1] == "Mirror") mirror = true;
-			if(vector[1] == "Glass") refract = true;
+			mirror = vector[1] == "Mirror";
+			refract = vector[1] == "Glass";
 		}else if (vector[0] == "v") {
 			vertices.push_back(glm::vec3(
 				std::stof(vector[1]) * scale, //string to float
@@ -810,6 +810,8 @@ int main(int argc, char *argv[]) {
 	// std::vector<ModelTriangle> triangles = loadObjFile("logo.obj", 0.003, textures);
 	// std::vector<ModelTriangle> triangles = loadObjFile("textured-cornell-box.obj", vertexScale, textures);
 	std::vector<ModelTriangle> triangles = loadObjFile("cornell-box.obj", vertexScale, textures);
+	// std::vector<ModelTriangle> triangles = loadObjFile("cornell-bunny.obj", vertexScale, textures);
+
 
 
 
