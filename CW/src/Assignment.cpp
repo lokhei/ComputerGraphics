@@ -397,6 +397,36 @@ bool is_shadow(RayTriangleIntersection intersect, std::vector<ModelTriangle> tri
 	}
 	return false;
 }
+
+//amount of refracted light
+float fresnel(const glm::vec3 I, const glm::vec3 N, const float ior) { 
+    float etai = 1; //index of refr of original medium
+	float etat = ior; //index of refr of new medium
+    float cosi = dot(I, N);
+	cosi = (cosi < -1) ? -1 : ((cosi > 1) ? 1 : cosi); //clamp values between -1 and 1
+    if (cosi > 0) std::swap(etai, etat); 
+	else cosi = -cosi;
+
+    float sint = etai / etat * sqrtf(std::max(0.f, 1 - cosi * cosi)); //using Snell's law
+	float kr;
+
+    if (sint >= 1) { // Total internal reflection
+        kr = 1.0; 
+    }else { 
+        float cost = sqrtf(std::max(0.f, 1 - sint * sint)); 
+        cosi = fabsf(cosi); 
+        float Rs = ((etat * cosi) - (etai * cost)) / ((etat * cosi) + (etai * cost)); 
+        float Rp = ((etai * cosi) - (etat * cost)) / ((etai * cosi) + (etat * cost)); 
+        kr = (Rs * Rs + Rp * Rp) / 2; 
+    } 
+
+	return kr; //refraction
+   
+    // transmittence is kt = 1 - kr;
+   
+}
+
+
 glm::vec3 refract(glm::vec3 incidence, glm::vec3 n, float refractiveIndex) {
 	
     float refrInd1 = 1; //refractive index of air
@@ -545,8 +575,19 @@ RayTriangleIntersection getClosestIntersection(glm::vec3 rayDirection, std::vect
 				intersection = getClosestReflection(intersect, reflection_ray, triangles, i, 1);
 			}else if(triangle.glass) {
 					glm::vec3 normal = normalize(triangle.normal);
+					glm::vec3 reflected_ray = normalize(rayDirection - (normal * 2.0f * glm::dot(rayDirection, normal)));
+
 					glm::vec3 refracted_ray = refract(rayDirection, normal, GLASS_REFRACTIVE_INDEX);
-					intersection = getClosestRefraction(intersect, refracted_ray, triangles, i, 1);
+
+					RayTriangleIntersection refrRTI = getClosestRefraction(intersect, refracted_ray, triangles, i, 1);
+					RayTriangleIntersection reflRTI = getClosestReflection(intersect, reflected_ray, triangles, i, 1);
+					Colour refractCol = refrRTI.intersectedTriangle.colour;
+					Colour reflectCol = reflRTI.intersectedTriangle.colour;
+					float kr = fresnel(rayDirection, normal, GLASS_REFRACTIVE_INDEX);
+					float kt = 1-kr;
+					bool outside = dot(rayDirection, normal) < 0; 
+					refrRTI.intersectedTriangle.colour = Colour(int((refractCol.red*kt)+(reflectCol.red*kr)),int((refractCol.green*kt)+(reflectCol.green*kr)),int((refractCol.blue*kt)+(reflectCol.blue*kr)));
+					intersection = refrRTI;
 			}else if(triangle.diamond) {
 					glm::vec3 normal = normalize(triangle.normal);
 					glm::vec3 refracted_ray = refract(rayDirection, normal, DIAMOND_REFRACTIVE_INDEX);
@@ -828,10 +869,10 @@ int main(int argc, char *argv[]) {
 	
 	// std::vector<ModelTriangle> triangles = loadObjFile("logo.obj", 0.003, textures);
 	// std::vector<ModelTriangle> triangles = loadObjFile("textured-cornell-box.obj", vertexScale, textures);
-	std::vector<ModelTriangle> triangles = loadObjFile("cornell-box.obj", vertexScale, textures);
+	// std::vector<ModelTriangle> triangles = loadObjFile("cornell-box.obj", vertexScale, textures);
 	// std::vector<ModelTriangle> triangles = loadObjFile("cornell-bunny.obj", vertexScale, textures);
 
-	// std::vector<ModelTriangle> triangles = loadObjFile("comp-cornell.obj", vertexScale, textures);
+	std::vector<ModelTriangle> triangles = loadObjFile("comp-cornell.obj", vertexScale, textures);
 
 
 
