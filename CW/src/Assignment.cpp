@@ -504,15 +504,10 @@ RayTriangleIntersection getClosestReflection(glm::vec3 inter, glm::vec3 directio
 		glm::vec3 reflection_ray = normalize(direction - (normal * 2.0f * dot(direction, normal)));
 		depth += 1;
 		intersection = getClosestReflection(intersection.intersectionPoint, reflection_ray, triangles, intersection.triangleIndex, depth);
-	} 
-	else if(intersection.intersectedTriangle.glass) {
+	}else if(intersection.intersectedTriangle.glass || intersection.intersectedTriangle.diamond) {
 		glm::vec3 normal = normalize(intersection.intersectedTriangle.normal);
-		glm::vec3 refracted_ray = refract(direction, normal, GLASS_REFRACTIVE_INDEX);
-		depth += 1;
-		intersection = getClosestRefraction(intersection.intersectionPoint, refracted_ray, triangles, intersection.triangleIndex, depth);
-	}else if(intersection.intersectedTriangle.diamond) {
-		glm::vec3 normal = normalize(intersection.intersectedTriangle.normal);
-		glm::vec3 refracted_ray = refract(direction, normal, DIAMOND_REFRACTIVE_INDEX);
+		float refractiveIndex = intersection.intersectedTriangle.glass ? GLASS_REFRACTIVE_INDEX : DIAMOND_REFRACTIVE_INDEX;
+		glm::vec3 refracted_ray = refract(direction, normal, refractiveIndex);
 		depth += 1;
 		intersection = getClosestRefraction(intersection.intersectionPoint, refracted_ray, triangles, intersection.triangleIndex, depth);
 	}
@@ -551,23 +546,19 @@ RayTriangleIntersection getClosestRefraction(glm::vec3 inter, glm::vec3 directio
 	if(depth > 5) {  //limit number of recursions
 		intersection.intersectedTriangle.colour = Colour(255,255,255);
 		return intersection;
-	}else if(intersection.intersectedTriangle.glass) {
-		glm::vec3 normal = normalize(intersection.intersectedTriangle.normal);
-		glm::vec3 refracted_ray = refract(direction, normal, GLASS_REFRACTIVE_INDEX);
-		depth +=1;
-		intersection = getClosestRefraction(intersection.intersectionPoint, refracted_ray, triangles, intersection.triangleIndex, depth);
-	}else if(intersection.intersectedTriangle.diamond) {
-		glm::vec3 normal = normalize(intersection.intersectedTriangle.normal);
-		glm::vec3 refracted_ray = refract(direction, normal, DIAMOND_REFRACTIVE_INDEX);
-		depth +=1;
-		intersection = getClosestRefraction(intersection.intersectionPoint, refracted_ray, triangles, intersection.triangleIndex, depth);
-	}
-	else if(intersection.intersectedTriangle.mirror) {
+	}else if(intersection.intersectedTriangle.mirror) {
 		glm::vec3 normal = normalize(intersection.intersectedTriangle.normal);
 		glm::vec3 reflection_ray = normalize(direction - (normal * 2.0f * dot(direction, normal)));
 		depth +=1;
 		intersection = getClosestReflection(intersection.intersectionPoint, reflection_ray, triangles, intersection.triangleIndex, depth);
-	} 
+	}else if(intersection.intersectedTriangle.glass || intersection.intersectedTriangle.diamond) {
+		float refractiveIndex = intersection.intersectedTriangle.glass ? GLASS_REFRACTIVE_INDEX : DIAMOND_REFRACTIVE_INDEX;
+
+		glm::vec3 normal = normalize(intersection.intersectedTriangle.normal);
+		glm::vec3 refracted_ray = refract(direction, normal, refractiveIndex);
+		depth +=1;
+		intersection = getClosestRefraction(intersection.intersectionPoint, refracted_ray, triangles, intersection.triangleIndex, depth);
+	}
 	return intersection;
 }
 
