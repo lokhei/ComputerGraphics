@@ -427,28 +427,46 @@ float fresnel(const glm::vec3 I, const glm::vec3 N, const float ior) {
 }
 
 
-glm::vec3 refract(glm::vec3 incidence, glm::vec3 n, float refractiveIndex) {
-	
-    float refrInd1 = 1; //refractive index of air
-    float refrInd2 = refractiveIndex; //refractive index of material
-    float cos_theta = glm::dot(n, incidence); //N . I
-	float sin_theta = 1 - pow(cos_theta, 2);
-    if (cos_theta < 0) {
-        // outside surface
-        cos_theta = -cos_theta; // make cos_theta +ve
-    } else {
-        // inside surface
-        std::swap(refrInd1, refrInd2); //swap indices
-        n = -n; //reverse normal direction
-    }
-    float refrRatio = refrInd1 / refrInd2;
-	float c_2 = 1 - pow(refrRatio,2) * sin_theta;
-	if(c_2 < 0) { //total internal refraction
-		return normalize(incidence - (n * 2.0f * sin_theta)); // return reflected ray
+glm::vec3 refract(glm::vec3 incidence, glm::vec3 N, float refractiveIndex) {
 
+
+    // float etai = 1.0; //refractive index of air
+    // float etat = refractiveIndex; //refractive index of material
+    // float cos_theta = glm::dot(N, incidence); //N . I
+	// cos_theta = (cos_theta < -1) ? -1 : ((cos_theta > 1) ? 1 : cos_theta); //clamp values between -1 and 1
+
+    // float eta = etai / etat;
+	
+
+	// glm::vec3 n = N; 
+    // if (cos_theta < 0) {
+    //     // outside surface
+    //     cos_theta = -cos_theta; // make cos_theta +ve
+    // } else {
+    //     // inside surface
+	// 	eta = 1/eta;
+    //     // std::swap(etai, etat); //swap indices
+    //     n = -N; //reverse normal direction
+    // }
+    // // float eta = etai / etat;
+
+	// float c_2 = 1 - eta*eta * (1 - cos_theta * cos_theta);
+	// if(c_2 < 0) { //total internal refraction
+	// 	return normalize(incidence - n * 2.0f * cos_theta); // return reflected ray
+	// }
+
+    // glm::vec3 refracted_ray = eta * incidence + (eta * cos_theta - sqrtf(c_2)) * n;
+
+    // return normalize(refracted_ray);
+
+	
+	float cos_theta = dot(incidence, N); //cos_theta
+
+	float inv_eta = refractiveIndex; //etat/etai
+	if(cos_theta > 0) {
+		inv_eta = 1.0/refractiveIndex; 
 	}
-    glm::vec3 refracted_ray = refrRatio * incidence + (refrRatio * cos_theta - sqrtf(c_2)) * n;
-    return normalize(refracted_ray);
+	return normalize(incidence * inv_eta - N * (-cos_theta + inv_eta*cos_theta));
 }
 
 
@@ -569,35 +587,45 @@ RayTriangleIntersection getClosestIntersection(glm::vec3 rayDirection, std::vect
 		if((u >=  0.0) && (u <= 1.0) && (v >= 0.0) && (v <= 1.0) && (u + v) <= 1.0 && t < distance && t > 0.0) {
 			glm::vec3 intersect = triangle.vertices[0]+u*e0+v*e1;
 			distance = t;
-			if(triangle.mirror) {
-				glm::vec3 normal = normalize(triangle.normal);
-				glm::vec3 reflection_ray = normalize(rayDirection - (normal * 2.0f * glm::dot(rayDirection, normal)));
-				intersection = getClosestReflection(intersect, reflection_ray, triangles, i, 1);
-			}else if(triangle.glass) {
-					glm::vec3 normal = normalize(triangle.normal);
-					glm::vec3 reflected_ray = normalize(rayDirection - (normal * 2.0f * glm::dot(rayDirection, normal)));
+			intersection.distanceFromCamera = t;
+			intersection.intersectedTriangle = triangle;
+			intersection.triangleIndex = i;
 
-					glm::vec3 refracted_ray = refract(rayDirection, normal, GLASS_REFRACTIVE_INDEX);
+			intersection.intersectionPoint = intersect;
+			intersection.u = u;
+			intersection.v = v;
 
-					RayTriangleIntersection refrRTI = getClosestRefraction(intersect, refracted_ray, triangles, i, 1);
-					RayTriangleIntersection reflRTI = getClosestReflection(intersect, reflected_ray, triangles, i, 1);
-					Colour refractCol = refrRTI.intersectedTriangle.colour;
-					Colour reflectCol = reflRTI.intersectedTriangle.colour;
-					float kr = fresnel(rayDirection, normal, GLASS_REFRACTIVE_INDEX);
-					float kt = 1-kr;
-					bool outside = dot(rayDirection, normal) < 0; 
-					refrRTI.intersectedTriangle.colour = Colour(int((refractCol.red*kt)+(reflectCol.red*kr)),int((refractCol.green*kt)+(reflectCol.green*kr)),int((refractCol.blue*kt)+(reflectCol.blue*kr)));
-					intersection = refrRTI;
-			}else if(triangle.diamond) {
-					glm::vec3 normal = normalize(triangle.normal);
-					glm::vec3 refracted_ray = refract(rayDirection, normal, DIAMOND_REFRACTIVE_INDEX);
-					intersection = getClosestRefraction(intersect, refracted_ray, triangles, i, 1);
-			}else {
-				intersection =  RayTriangleIntersection(intersect, t, triangle, i);
-				intersection.u = u;
-				intersection.v = v;
-			}
 		}
+	}
+
+	ModelTriangle triangle = intersection.intersectedTriangle;
+
+	if(triangle.mirror) {
+		glm::vec3 normal = normalize(triangle.normal);
+		glm::vec3 reflectionRay = normalize(rayDirection - (normal * 2.0f * glm::dot(rayDirection, normal)));
+		intersection = getClosestReflection(intersection.intersectionPoint, reflectionRay, triangles, intersection.triangleIndex, 1);
+	}else if(triangle.glass || triangle.diamond) {
+
+		float refractiveIndex = triangle.glass ? GLASS_REFRACTIVE_INDEX : DIAMOND_REFRACTIVE_INDEX;
+		glm::vec3 normal = normalize(triangle.normal);
+		float kr = fresnel(rayDirection, normal, refractiveIndex);
+		Colour refractCol(0,0,0);
+
+		RayTriangleIntersection refrRTI;
+
+		if (kr < 1){ // only compute refraction if not total internal reflection
+			glm::vec3 refractionRay = refract(rayDirection, normal, refractiveIndex);
+			refrRTI = getClosestRefraction(intersection.intersectionPoint, refractionRay, triangles, intersection.triangleIndex, 1);
+			refractCol = refrRTI.intersectedTriangle.colour;
+		}
+
+		glm::vec3 reflectionRay = normalize(rayDirection - (normal * 2.0f * glm::dot(rayDirection, normal)));
+		RayTriangleIntersection reflRTI = getClosestReflection(intersection.intersectionPoint, reflectionRay, triangles, intersection.triangleIndex, 1);
+		Colour reflectCol = reflRTI.intersectedTriangle.colour;
+		float kt = 1-kr;
+		refrRTI.intersectedTriangle.colour = Colour(int((refractCol.red*kt)+(reflectCol.red*kr)),int((refractCol.green*kt)+(reflectCol.green*kr)),int((refractCol.blue*kt)+(reflectCol.blue*kr)));
+		intersection = refrRTI;
+
 	}
 	return intersection;
 }
@@ -860,7 +888,7 @@ int main(int argc, char *argv[]) {
 	SDL_Event event;
 
 	float vertexScale = 0.5;
-	int renderMode = 0;
+	int renderMode = 2;
 	int lightMode = 0;
 
 	initialiseLights(3);
