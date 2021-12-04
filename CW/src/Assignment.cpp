@@ -21,11 +21,6 @@
 #define GLASS_REFRACTIVE_INDEX 1.5  // refractive index of glass is 1.5
 #define DIAMOND_REFRACTIVE_INDEX 1.8  // refractive index of diamond is 1.8
 
-
-
-
-RayTriangleIntersection getClosestRefraction(glm::vec3 inter, glm::vec3 direction, std::vector<ModelTriangle> triangles, int index, int depth);
-
 bool orbiting = false;
 
 glm::vec3 camPos(0.0, 0.0, 4.0);
@@ -428,40 +423,8 @@ float fresnel(const glm::vec3 I, const glm::vec3 N, const float ior) {
 
 
 glm::vec3 refract(glm::vec3 incidence, glm::vec3 N, float refractiveIndex) {
-
-
-    // float etai = 1.0; //refractive index of air
-    // float etat = refractiveIndex; //refractive index of material
-    // float cos_theta = glm::dot(N, incidence); //N . I
-	// cos_theta = (cos_theta < -1) ? -1 : ((cos_theta > 1) ? 1 : cos_theta); //clamp values between -1 and 1
-
-    // float eta = etai / etat;
-	
-
-	// glm::vec3 n = N; 
-    // if (cos_theta < 0) {
-    //     // outside surface
-    //     cos_theta = -cos_theta; // make cos_theta +ve
-    // } else {
-    //     // inside surface
-	// 	eta = 1/eta;
-    //     // std::swap(etai, etat); //swap indices
-    //     n = -N; //reverse normal direction
-    // }
-    // // float eta = etai / etat;
-
-	// float c_2 = 1 - eta*eta * (1 - cos_theta * cos_theta);
-	// if(c_2 < 0) { //total internal refraction
-	// 	return normalize(incidence - n * 2.0f * cos_theta); // return reflected ray
-	// }
-
-    // glm::vec3 refracted_ray = eta * incidence + (eta * cos_theta - sqrtf(c_2)) * n;
-
-    // return normalize(refracted_ray);
-
 	
 	float cos_theta = dot(incidence, N); //cos_theta
-
 	float inv_eta = refractiveIndex; //etat/etai
 	if(cos_theta > 0) {
 		inv_eta = 1.0/refractiveIndex; 
@@ -470,7 +433,7 @@ glm::vec3 refract(glm::vec3 incidence, glm::vec3 N, float refractiveIndex) {
 }
 
 
-RayTriangleIntersection getClosestReflection(glm::vec3 inter, glm::vec3 direction, std::vector<ModelTriangle> triangles, int index, int depth) {
+RayTriangleIntersection getClosestRef(glm::vec3 inter, glm::vec3 direction, std::vector<ModelTriangle> triangles, int index, int depth) {
 	RayTriangleIntersection intersection;
 	intersection.distanceFromCamera = std::numeric_limits<float>::infinity();
 			
@@ -503,64 +466,17 @@ RayTriangleIntersection getClosestReflection(glm::vec3 inter, glm::vec3 directio
 		glm::vec3 normal = normalize(intersection.intersectedTriangle.normal);
 		glm::vec3 reflection_ray = normalize(direction - (normal * 2.0f * dot(direction, normal)));
 		depth += 1;
-		intersection = getClosestReflection(intersection.intersectionPoint, reflection_ray, triangles, intersection.triangleIndex, depth);
+		intersection = getClosestRef(intersection.intersectionPoint, reflection_ray, triangles, intersection.triangleIndex, depth);
 	}else if(intersection.intersectedTriangle.glass || intersection.intersectedTriangle.diamond) {
 		glm::vec3 normal = normalize(intersection.intersectedTriangle.normal);
 		float refractiveIndex = intersection.intersectedTriangle.glass ? GLASS_REFRACTIVE_INDEX : DIAMOND_REFRACTIVE_INDEX;
 		glm::vec3 refracted_ray = refract(direction, normal, refractiveIndex);
 		depth += 1;
-		intersection = getClosestRefraction(intersection.intersectionPoint, refracted_ray, triangles, intersection.triangleIndex, depth);
+		intersection = getClosestRef(intersection.intersectionPoint, refracted_ray, triangles, intersection.triangleIndex, depth);
 	}
 	return intersection;
 }
 
-
-
-RayTriangleIntersection getClosestRefraction(glm::vec3 inter, glm::vec3 direction, std::vector<ModelTriangle> triangles, int index, int depth) {
-	RayTriangleIntersection intersection;
-	intersection.distanceFromCamera = std::numeric_limits<float>::infinity();
-
-	for(int i = 0; i < triangles.size(); i++) {
-		if (i != index){
-
-			ModelTriangle triangle = triangles[i];
-			glm::vec3 e0 = triangle.vertices[1] - triangle.vertices[0];
-			glm::vec3 e1 = triangle.vertices[2] - triangle.vertices[0];
-			glm::vec3 SPVector = inter - triangle.vertices[0];
-			glm::mat3 DEMatrix(-direction, e0, e1);
-			glm::vec3 possibleSolution = glm::inverse(DEMatrix) * SPVector;
-			float t = possibleSolution.x, u = possibleSolution.y, v = possibleSolution.z;
-
-			if((u >= 0.0) && (u <= 1.0) && (v >= 0.0) && (v <= 1.0) && (u + v) <= 1.0 && intersection.distanceFromCamera > t && t > 0.0) {
-				glm::vec3 intersect = triangle.vertices[0]+u*e0+v*e1;
-				intersection.intersectionPoint = intersect;
-				intersection.distanceFromCamera = t;
-				intersection.intersectedTriangle = triangle;
-				intersection.triangleIndex = i;
-				intersection.u = u;
-				intersection.v = v;
-				
-			}
-		}
-	}
-	if(depth > 5) {  //limit number of recursions
-		intersection.intersectedTriangle.colour = Colour(255,255,255);
-		return intersection;
-	}else if(intersection.intersectedTriangle.mirror) {
-		glm::vec3 normal = normalize(intersection.intersectedTriangle.normal);
-		glm::vec3 reflection_ray = normalize(direction - (normal * 2.0f * dot(direction, normal)));
-		depth +=1;
-		intersection = getClosestReflection(intersection.intersectionPoint, reflection_ray, triangles, intersection.triangleIndex, depth);
-	}else if(intersection.intersectedTriangle.glass || intersection.intersectedTriangle.diamond) {
-		float refractiveIndex = intersection.intersectedTriangle.glass ? GLASS_REFRACTIVE_INDEX : DIAMOND_REFRACTIVE_INDEX;
-
-		glm::vec3 normal = normalize(intersection.intersectedTriangle.normal);
-		glm::vec3 refracted_ray = refract(direction, normal, refractiveIndex);
-		depth +=1;
-		intersection = getClosestRefraction(intersection.intersectionPoint, refracted_ray, triangles, intersection.triangleIndex, depth);
-	}
-	return intersection;
-}
 
 RayTriangleIntersection getClosestIntersection(glm::vec3 rayDirection, std::vector<ModelTriangle> triangles) {
 	RayTriangleIntersection intersection;
@@ -594,7 +510,7 @@ RayTriangleIntersection getClosestIntersection(glm::vec3 rayDirection, std::vect
 	if(triangle.mirror) {
 		glm::vec3 normal = normalize(triangle.normal);
 		glm::vec3 reflectionRay = normalize(rayDirection - (normal * 2.0f * glm::dot(rayDirection, normal)));
-		intersection = getClosestReflection(intersection.intersectionPoint, reflectionRay, triangles, intersection.triangleIndex, 1);
+		intersection = getClosestRef(intersection.intersectionPoint, reflectionRay, triangles, intersection.triangleIndex, 1);
 	}else if(triangle.glass || triangle.diamond) {
 
 		float refractiveIndex = triangle.glass ? GLASS_REFRACTIVE_INDEX : DIAMOND_REFRACTIVE_INDEX;
@@ -606,12 +522,13 @@ RayTriangleIntersection getClosestIntersection(glm::vec3 rayDirection, std::vect
 
 		if (kr < 1){ // only compute refraction if not total internal reflection
 			glm::vec3 refractionRay = refract(rayDirection, normal, refractiveIndex);
-			refrRTI = getClosestRefraction(intersection.intersectionPoint, refractionRay, triangles, intersection.triangleIndex, 1);
+			refrRTI = getClosestRef(intersection.intersectionPoint, refractionRay, triangles, intersection.triangleIndex, 1);
+
 			refractCol = refrRTI.intersectedTriangle.colour;
 		}
 
 		glm::vec3 reflectionRay = normalize(rayDirection - (normal * 2.0f * glm::dot(rayDirection, normal)));
-		RayTriangleIntersection reflRTI = getClosestReflection(intersection.intersectionPoint, reflectionRay, triangles, intersection.triangleIndex, 1);
+		RayTriangleIntersection reflRTI = getClosestRef(intersection.intersectionPoint, reflectionRay, triangles, intersection.triangleIndex, 1);
 		Colour reflectCol = reflRTI.intersectedTriangle.colour;
 		float kt = 1-kr;
 		refrRTI.intersectedTriangle.colour = Colour(int((refractCol.red*kt)+(reflectCol.red*kr)),int((refractCol.green*kt)+(reflectCol.green*kr)),int((refractCol.blue*kt)+(reflectCol.blue*kr)));
