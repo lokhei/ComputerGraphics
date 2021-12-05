@@ -420,7 +420,12 @@ float fresnel(const glm::vec3 I, const glm::vec3 N, const float ior) {
     // transmittence is kt = 1 - kr;
    
 }
+float beerLambert(float absorpCoeff, float distance){
 
+	return exp(-absorpCoeff*distance);
+
+
+}
 
 glm::vec3 refract(glm::vec3 incidence, glm::vec3 N, float refractiveIndex) {
 	
@@ -478,7 +483,7 @@ RayTriangleIntersection getClosestRef(glm::vec3 inter, glm::vec3 direction, std:
 }
 
 
-RayTriangleIntersection getClosestIntersection(glm::vec3 rayDirection, std::vector<ModelTriangle> triangles) {
+RayTriangleIntersection getClosestIntersection(glm::vec3 rayDirection, std::vector<ModelTriangle> triangles, bool checkLocalColour) {
 	RayTriangleIntersection intersection;
 	intersection.distanceFromCamera = std::numeric_limits<float>::infinity();
 	float distance = std::numeric_limits<float>::infinity();
@@ -507,11 +512,13 @@ RayTriangleIntersection getClosestIntersection(glm::vec3 rayDirection, std::vect
 
 	ModelTriangle triangle = intersection.intersectedTriangle;
 
-	if(triangle.mirror) {
+	if(triangle.mirror && !checkLocalColour) {
 		glm::vec3 normal = normalize(triangle.normal);
 		glm::vec3 reflectionRay = normalize(rayDirection - (normal * 2.0f * glm::dot(rayDirection, normal)));
 		intersection = getClosestRef(intersection.intersectionPoint, reflectionRay, triangles, intersection.triangleIndex, 1);
-	}else if(triangle.glass || triangle.diamond) {
+		intersection.intersectedTriangle.mirror = true;
+			
+	}else if((triangle.glass || triangle.diamond) && !checkLocalColour) {
 
 		float refractiveIndex = triangle.glass ? GLASS_REFRACTIVE_INDEX : DIAMOND_REFRACTIVE_INDEX;
 		glm::vec3 normal = normalize(triangle.normal);
@@ -627,7 +634,7 @@ void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangles, f
 		for(int y = 0; y < window.height; y++) {
 			glm::vec3 direction(x-float(window.width / 2), float(window.height / 2) - y, -focalLength*planeMultiplier);;
 			glm::vec3 ray = normalize(camOrientation * (direction-camPos));
-			RayTriangleIntersection intersection = getClosestIntersection(ray, triangles);
+			RayTriangleIntersection intersection = getClosestIntersection(ray, triangles, false);
 
 			Colour colour;
 
@@ -670,10 +677,22 @@ void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangles, f
                     uint8_t green = (c >> 8) & 0xff;
                     uint8_t blue = c & 0xff;
 					colour = Colour(red, green, blue);
+				} else if (intersection.intersectedTriangle.mirror) {
+					Colour localCol = getClosestIntersection(ray, triangles, true).intersectedTriangle.colour;
+					float r = 0.5;
+					colour = intersection.intersectedTriangle.colour;
+					colour.red = r * colour.red + (1-r) * localCol.red;
+					colour.blue = r * colour.blue + (1-r) * localCol.blue;
+					colour.green = r * colour.green + (1-r) * localCol.green;
+
 				}else{
 					colour = intersection.intersectedTriangle.colour;
+					
 				}
 
+				
+
+				
 
 				colour.red *= brightness;
 				colour.green *= brightness;
@@ -808,9 +827,10 @@ int main(int argc, char *argv[]) {
 	// std::vector<ModelTriangle> triangles = loadObjFile("cornell-box.obj", vertexScale, textures);
 	// std::vector<ModelTriangle> triangles = loadObjFile("cornell-bunny.obj", vertexScale, textures);
 
-	std::vector<ModelTriangle> triangles = loadObjFile("comp-cornell.obj", vertexScale, textures);
+	// std::vector<ModelTriangle> triangles = loadObjFile("comp-cornell.obj", vertexScale, textures);
 
 
+	std::vector<ModelTriangle> triangles = loadObjFile("empty-cornell.obj", vertexScale, textures);
 
 
 	// std::vector<ModelTriangle> triangles = loadObjFile("high-res-sphere.obj", 0.3, textures);
