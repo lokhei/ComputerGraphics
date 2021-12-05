@@ -18,8 +18,6 @@
 
 #define WIDTH 640
 #define HEIGHT 480
-#define GLASS_REFRACTIVE_INDEX 1.5  // refractive index of glass is 1.5
-#define DIAMOND_REFRACTIVE_INDEX 1.8  // refractive index of diamond is 1.8
 
 bool orbiting = false;
 
@@ -30,6 +28,7 @@ glm::vec3 light(1.0, 1.0, 2.0);
 struct ColourProps{
 	Colour colour;
 	float d;
+	float Ni;
 };
 
 std::vector<glm::vec3> lights{};
@@ -88,9 +87,11 @@ std::unordered_map<std::string, ColourProps> loadMtlFile(const std::string &file
 			colour_name = line[1];	
 		} else if (line[0] == "Kd") {
 			Colour colour(int(std::stof(line[1])*255),int(std::stof(line[2])*255),int(std::stof(line[3])*255));
-			colours.insert({colour_name, {colour, 1.0}});
+			colours.insert({colour_name, {colour, 1.0, 1.0}});
 		} else if (line[0] == "d"){
 			colours[colour_name].d = std::stof(line[1]);
+		} else if (line[0] == "Ni"){
+			colours[colour_name].Ni = std::stof(line[1]);
 		}else if(line[0] == "map_Kd") {
 			Colour colour = colours[colour_name].colour;
 			colour.name = line[1]; //file name
@@ -135,9 +136,8 @@ std::vector<ModelTriangle> loadObjFile(const std::string &filename, float scale,
 	std::vector<TexturePoint> texturePoints;
 	std::unordered_map<std::string, ColourProps> materials;
 	std::vector<glm::vec3> normals;
-	bool glass = false;
-	bool diamond = false;
 	float d = 1.0; // 1.0 = opaque
+	float Ni = 1.0; // refractive index = air
 
 
 	std::ifstream inputStr(filename, std::ifstream::in);
@@ -150,9 +150,7 @@ std::vector<ModelTriangle> loadObjFile(const std::string &filename, float scale,
 		}else if (vector[0] == "usemtl") {
 			colour = materials[vector[1]].colour;
 			d = materials[vector[1]].d;
-			glass = vector[1] == "Glass";
-			diamond = vector[1] == "Diamond";
-
+			Ni = materials[vector[1]].Ni;
 		}else if (vector[0] == "v") {
 			vertices.push_back(glm::vec3(
 				std::stof(vector[1]) * scale, //string to float
@@ -172,13 +170,11 @@ std::vector<ModelTriangle> loadObjFile(const std::string &filename, float scale,
 				triangle.vertices[i] = vertices[std::stoi(v[0]) - 1];
 				if (v.size() > 1 && v[1] != "") triangle.texturePoints[i] = texturePoints[std::stoi(v[1]) - 1];
 				if (v.size() > 2 && v[2] != "") triangle.vertexNormals[i] = normals[std::stoi(v[2]) - 1];
-
 			}
 			triangle.colour = colour;
 			triangle.normal = glm::normalize(glm::cross(glm::vec3(triangle.vertices[1] - triangle.vertices[0]), glm::vec3(triangle.vertices[2] - triangle.vertices[0])));
 			triangle.mirror = d;
-			triangle.glass = glass;
-			triangle.diamond = diamond;
+			triangle.refractInd = Ni;
 			faces.push_back(triangle);
 		}else if(vector[0] == "vt") {
 			texturePoints.push_back(TexturePoint(stof(vector[1]), stof(vector[2])));
@@ -478,9 +474,9 @@ RayTriangleIntersection getClosestRef(glm::vec3 inter, glm::vec3 direction, std:
 		glm::vec3 reflection_ray = normalize(direction - (normal * 2.0f * dot(direction, normal)));
 		depth += 1;
 		intersection = getClosestRef(intersection.intersectionPoint, reflection_ray, triangles, intersection.triangleIndex, depth);
-	}else if(intersection.intersectedTriangle.glass || intersection.intersectedTriangle.diamond) {
+	}else if(intersection.intersectedTriangle.refractInd != 1.0) {
 		glm::vec3 normal = normalize(intersection.intersectedTriangle.normal);
-		float refractiveIndex = intersection.intersectedTriangle.glass ? GLASS_REFRACTIVE_INDEX : DIAMOND_REFRACTIVE_INDEX;
+		float refractiveIndex = intersection.intersectedTriangle.refractInd;
 		glm::vec3 refracted_ray = refract(direction, normal, refractiveIndex);
 		depth += 1;
 		intersection = getClosestRef(intersection.intersectionPoint, refracted_ray, triangles, intersection.triangleIndex, depth);
@@ -524,9 +520,9 @@ RayTriangleIntersection getClosestIntersection(glm::vec3 rayDirection, std::vect
 		intersection = getClosestRef(intersection.intersectionPoint, reflectionRay, triangles, intersection.triangleIndex, 1);
 		intersection.intersectedTriangle.mirror = triangle.mirror;
 			
-	}else if((triangle.glass || triangle.diamond) && !checkLocalColour) {
+	}else if(triangle.refractInd != 1.0 && !checkLocalColour) {
 
-		float refractiveIndex = triangle.glass ? GLASS_REFRACTIVE_INDEX : DIAMOND_REFRACTIVE_INDEX;
+		float refractiveIndex = triangle.refractInd;
 		glm::vec3 normal = normalize(triangle.normal);
 		float kr = fresnel(rayDirection, normal, refractiveIndex);
 		Colour refractCol(0,0,0);
@@ -830,13 +826,13 @@ int main(int argc, char *argv[]) {
 	
 	// std::vector<ModelTriangle> triangles = loadObjFile("logo.obj", 0.003, textures);
 	// std::vector<ModelTriangle> triangles = loadObjFile("textured-cornell-box.obj", vertexScale, textures);
-	// std::vector<ModelTriangle> triangles = loadObjFile("cornell-box.obj", vertexScale, textures);
+	std::vector<ModelTriangle> triangles = loadObjFile("cornell-box.obj", vertexScale, textures);
 	// std::vector<ModelTriangle> triangles = loadObjFile("cornell-bunny.obj", vertexScale, textures);
 
 	// std::vector<ModelTriangle> triangles = loadObjFile("comp-cornell.obj", vertexScale, textures);
 
 
-	std::vector<ModelTriangle> triangles = loadObjFile("empty-cornell.obj", vertexScale, textures);
+	// std::vector<ModelTriangle> triangles = loadObjFile("empty-cornell.obj", vertexScale, textures);
 
 
 	// std::vector<ModelTriangle> triangles = loadObjFile("high-res-sphere.obj", 0.3, textures);

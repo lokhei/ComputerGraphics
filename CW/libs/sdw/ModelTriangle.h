@@ -13,8 +13,7 @@ struct ModelTriangle {
 	glm::vec3 normal{};
 	std::array<glm::vec3, 3> vertexNormals{};
 	float mirror = 1.0;
-	bool glass = false;
-	bool diamond = false;
+	float refractInd = 1.0;
 
 
 
