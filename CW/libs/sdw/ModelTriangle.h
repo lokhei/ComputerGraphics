@@ -12,7 +12,7 @@ struct ModelTriangle {
 	Colour colour{};
 	glm::vec3 normal{};
 	std::array<glm::vec3, 3> vertexNormals{};
-	bool mirror = false;
+	float mirror = 1.0;
 	bool glass = false;
 	bool diamond = false;
 

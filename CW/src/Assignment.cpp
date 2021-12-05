@@ -27,6 +27,11 @@ glm::vec3 camPos(0.0, 0.0, 4.0);
 glm::vec3 light(1.0, 1.0, 2.0);
 
 
+struct ColourProps{
+	Colour colour;
+	float d;
+};
+
 std::vector<glm::vec3> lights{};
 
 
@@ -70,8 +75,8 @@ void initialiseLights(int size){
 	// }
 }
 
-std::unordered_map<std::string, Colour> loadMtlFile(const std::string &filename, std::unordered_map<std::string, TextureMap> &textures) {
-	std::unordered_map<std::string, Colour> colours;
+std::unordered_map<std::string, ColourProps> loadMtlFile(const std::string &filename, std::unordered_map<std::string, TextureMap> &textures) {
+	std::unordered_map<std::string, ColourProps> colours;
 
 	std::ifstream inputStream(filename, std::ifstream::in);
 	std::string nextLine;
@@ -79,17 +84,18 @@ std::unordered_map<std::string, Colour> loadMtlFile(const std::string &filename,
 
 	while (std::getline(inputStream, nextLine)) {
 		std::vector<std::string> line = split(nextLine, ' ');
-
 		if (line[0] == "newmtl") {
 			colour_name = line[1];	
 		} else if (line[0] == "Kd") {
 			Colour colour(int(std::stof(line[1])*255),int(std::stof(line[2])*255),int(std::stof(line[3])*255));
-			colours.insert({colour_name, colour});
-		} else if(line[0] == "map_Kd") {
-			Colour colour = colours[colour_name];
-			colour.name = line[1];
+			colours.insert({colour_name, {colour, 1.0}});
+		} else if (line[0] == "d"){
+			colours[colour_name].d = std::stof(line[1]);
+		}else if(line[0] == "map_Kd") {
+			Colour colour = colours[colour_name].colour;
+			colour.name = line[1]; //file name
 			textures.insert({line[1], TextureMap(line[1])});
-			colours[colour_name] = colour;
+			colours[colour_name].colour = colour;
 		}
 	}
 	inputStream.close();
@@ -127,11 +133,11 @@ std::vector<ModelTriangle> loadObjFile(const std::string &filename, float scale,
 	std::vector<glm::vec3> vertices;
 	std::vector<ModelTriangle> faces;
 	std::vector<TexturePoint> texturePoints;
-	std::unordered_map<std::string, Colour> materials;
+	std::unordered_map<std::string, ColourProps> materials;
 	std::vector<glm::vec3> normals;
-	bool mirror = false;
 	bool glass = false;
 	bool diamond = false;
+	float d = 1.0; // 1.0 = opaque
 
 
 	std::ifstream inputStr(filename, std::ifstream::in);
@@ -142,8 +148,8 @@ std::vector<ModelTriangle> loadObjFile(const std::string &filename, float scale,
 		if (vector[0] == "mtllib") {
 			materials = loadMtlFile(vector[1], textures);
 		}else if (vector[0] == "usemtl") {
-			colour = materials[vector[1]];
-			mirror = vector[1] == "Mirror";
+			colour = materials[vector[1]].colour;
+			d = materials[vector[1]].d;
 			glass = vector[1] == "Glass";
 			diamond = vector[1] == "Diamond";
 
@@ -170,7 +176,7 @@ std::vector<ModelTriangle> loadObjFile(const std::string &filename, float scale,
 			}
 			triangle.colour = colour;
 			triangle.normal = glm::normalize(glm::cross(glm::vec3(triangle.vertices[1] - triangle.vertices[0]), glm::vec3(triangle.vertices[2] - triangle.vertices[0])));
-			triangle.mirror = mirror;
+			triangle.mirror = d;
 			triangle.glass = glass;
 			triangle.diamond = diamond;
 			faces.push_back(triangle);
@@ -467,7 +473,7 @@ RayTriangleIntersection getClosestRef(glm::vec3 inter, glm::vec3 direction, std:
 		intersection.intersectedTriangle.colour = Colour(255,255,255);
 		return intersection;
 	}
-	else if(intersection.intersectedTriangle.mirror) {
+	else if(intersection.intersectedTriangle.mirror < 1.0) {
 		glm::vec3 normal = normalize(intersection.intersectedTriangle.normal);
 		glm::vec3 reflection_ray = normalize(direction - (normal * 2.0f * dot(direction, normal)));
 		depth += 1;
@@ -512,11 +518,11 @@ RayTriangleIntersection getClosestIntersection(glm::vec3 rayDirection, std::vect
 
 	ModelTriangle triangle = intersection.intersectedTriangle;
 
-	if(triangle.mirror && !checkLocalColour) {
+	if(triangle.mirror < 1.0 && !checkLocalColour) {
 		glm::vec3 normal = normalize(triangle.normal);
 		glm::vec3 reflectionRay = normalize(rayDirection - (normal * 2.0f * glm::dot(rayDirection, normal)));
 		intersection = getClosestRef(intersection.intersectionPoint, reflectionRay, triangles, intersection.triangleIndex, 1);
-		intersection.intersectedTriangle.mirror = true;
+		intersection.intersectedTriangle.mirror = triangle.mirror;
 			
 	}else if((triangle.glass || triangle.diamond) && !checkLocalColour) {
 
@@ -677,13 +683,13 @@ void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangles, f
                     uint8_t green = (c >> 8) & 0xff;
                     uint8_t blue = c & 0xff;
 					colour = Colour(red, green, blue);
-				} else if (intersection.intersectedTriangle.mirror) {
+				} else if (intersection.intersectedTriangle.mirror < 1.0) {
 					Colour localCol = getClosestIntersection(ray, triangles, true).intersectedTriangle.colour;
-					float r = 0.5;
+					float d = intersection.intersectedTriangle.mirror;
 					colour = intersection.intersectedTriangle.colour;
-					colour.red = r * colour.red + (1-r) * localCol.red;
-					colour.blue = r * colour.blue + (1-r) * localCol.blue;
-					colour.green = r * colour.green + (1-r) * localCol.green;
+					colour.red = (1-d) * colour.red + d * localCol.red;
+					colour.blue = (1-d) * colour.blue + d * localCol.blue;
+					colour.green = (1-d) * colour.green + d * localCol.green;
 
 				}else{
 					colour = intersection.intersectedTriangle.colour;
