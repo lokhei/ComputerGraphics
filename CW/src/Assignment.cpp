@@ -27,8 +27,8 @@ glm::vec3 light(1.0, 1.0, 2.0);
 
 struct ColourProps{
 	Colour colour;
-	float d;
-	float Ni;
+	float d; //dissolve
+	float Ni; //refractive index
 };
 
 std::vector<glm::vec3> lights{};
@@ -79,24 +79,24 @@ std::unordered_map<std::string, ColourProps> loadMtlFile(const std::string &file
 
 	std::ifstream inputStream(filename, std::ifstream::in);
 	std::string nextLine;
-	std::string colour_name;
+	std::string colourName;
 
 	while (std::getline(inputStream, nextLine)) {
 		std::vector<std::string> line = split(nextLine, ' ');
 		if (line[0] == "newmtl") {
-			colour_name = line[1];	
+			colourName = line[1];	
 		} else if (line[0] == "Kd") {
 			Colour colour(int(std::stof(line[1])*255),int(std::stof(line[2])*255),int(std::stof(line[3])*255));
-			colours.insert({colour_name, {colour, 1.0, 1.0}});
+			colours.insert({colourName, {colour, 1.0, 1.0}});
 		} else if (line[0] == "d"){
-			colours[colour_name].d = std::stof(line[1]);
+			colours[colourName].d = std::stof(line[1]);
 		} else if (line[0] == "Ni"){
-			colours[colour_name].Ni = std::stof(line[1]);
+			colours[colourName].Ni = std::stof(line[1]);
 		}else if(line[0] == "map_Kd") {
-			Colour colour = colours[colour_name].colour;
+			Colour colour = colours[colourName].colour;
 			colour.name = line[1]; //file name
 			textures.insert({line[1], TextureMap(line[1])});
-			colours[colour_name].colour = colour;
+			colours[colourName].colour = colour;
 		}
 	}
 	inputStream.close();
@@ -107,7 +107,6 @@ std::unordered_map<std::string, ColourProps> loadMtlFile(const std::string &file
 std::vector<ModelTriangle> vertexNormals(std::vector<ModelTriangle> triangles) {
 	for(int i = 0; i < triangles.size(); i++) {
 		ModelTriangle triangle = triangles[i];
-		std::vector<glm::vec3> vertex_normals;
 		for(int v = 0; v < triangle.vertices.size(); v++) {
 			glm::vec3 vertex = triangle.normal;
 			int count = 1;
@@ -368,12 +367,12 @@ void orbit(bool orb){
 	}	
 }
 
-void reset_camera() {
+void resetCamera() {
 	camPos = glm::vec3(0.0,0.0,4.0);
 	camOrientation = glm::mat3(glm::vec3(1.0,0.0,0.0),glm::vec3(0.0,1.0,0.0),glm::vec3(0.0,0.0,1.0));
 }
 
-bool is_shadow(RayTriangleIntersection intersect, std::vector<ModelTriangle> triangles, glm::vec3 light) {
+bool isShadow(RayTriangleIntersection intersect, std::vector<ModelTriangle> triangles, glm::vec3 light) {
 	glm::vec3 shadowRay = light-intersect.intersectionPoint;
 	for(int i = 0; i < triangles.size(); i++) {
 		if (i != intersect.triangleIndex){
@@ -431,12 +430,12 @@ float beerLambert(float absorpCoeff, float distance){
 
 glm::vec3 refract(glm::vec3 incidence, glm::vec3 N, float refractiveIndex) {
 	
-	float cos_theta = dot(incidence, N); //cos_theta
-	float inv_eta = refractiveIndex; //etat/etai
-	if(cos_theta > 0) {
-		inv_eta = 1.0/refractiveIndex; 
+	float cosTheta = dot(incidence, N); //cos_theta
+	float invEta = refractiveIndex; //etat/etai
+	if(cosTheta > 0) {
+		invEta = 1.0/refractiveIndex; 
 	}
-	return normalize(incidence * inv_eta - N * (-cos_theta + inv_eta*cos_theta));
+	return normalize(incidence * invEta - N * (-cosTheta + invEta*cosTheta));
 }
 
 
@@ -464,28 +463,40 @@ RayTriangleIntersection getClosestRef(glm::vec3 inter, glm::vec3 direction, std:
 			}
 		}
 	}
+
+	ModelTriangle triangle = intersection.intersectedTriangle;
+		Colour localCol = intersection.intersectedTriangle.colour;
+
+
 	if(depth > 5) { //limit number of recursions
 		if(intersection.distanceFromCamera )
-		intersection.intersectedTriangle.colour = Colour(255,255,255);
+		triangle.colour = Colour(255,255,255);
 		return intersection;
-	}
-	else if(intersection.intersectedTriangle.mirror < 1.0) {
-		glm::vec3 normal = normalize(intersection.intersectedTriangle.normal);
-		glm::vec3 reflection_ray = normalize(direction - (normal * 2.0f * dot(direction, normal)));
+	}else if(triangle.refractInd != 1.0) { //not air
+		glm::vec3 normal = normalize(triangle.normal);
+		float refractiveIndex = triangle.refractInd;
+		glm::vec3 refractedRay = refract(direction, normal, refractiveIndex);
 		depth += 1;
-		intersection = getClosestRef(intersection.intersectionPoint, reflection_ray, triangles, intersection.triangleIndex, depth);
-	}else if(intersection.intersectedTriangle.refractInd != 1.0) {
+		intersection = getClosestRef(intersection.intersectionPoint, refractedRay, triangles, intersection.triangleIndex, depth);
+	}else if(intersection.intersectedTriangle.mirror < 1.0) { //not opaque
 		glm::vec3 normal = normalize(intersection.intersectedTriangle.normal);
-		float refractiveIndex = intersection.intersectedTriangle.refractInd;
-		glm::vec3 refracted_ray = refract(direction, normal, refractiveIndex);
+		glm::vec3 reflectionRay = normalize(direction - (normal * 2.0f * dot(direction, normal)));
 		depth += 1;
-		intersection = getClosestRef(intersection.intersectionPoint, refracted_ray, triangles, intersection.triangleIndex, depth);
+		intersection = getClosestRef(intersection.intersectionPoint, reflectionRay, triangles, intersection.triangleIndex, depth);
 	}
+
+	intersection.intersectedTriangle.mirror = triangle.mirror;
+	float d = intersection.intersectedTriangle.mirror;
+	Colour colour = intersection.intersectedTriangle.colour;
+	colour.red = (1-d) * colour.red + d * localCol.red;
+	colour.blue = (1-d) * colour.blue + d * localCol.blue;
+	colour.green = (1-d) * colour.green + d * localCol.green;
+	intersection.intersectedTriangle.colour = colour;
 	return intersection;
 }
 
 
-RayTriangleIntersection getClosestIntersection(glm::vec3 rayDirection, std::vector<ModelTriangle> triangles, bool checkLocalColour) {
+RayTriangleIntersection getClosestIntersection(glm::vec3 rayDirection, std::vector<ModelTriangle> triangles) {
 	RayTriangleIntersection intersection;
 	intersection.distanceFromCamera = std::numeric_limits<float>::infinity();
 	float distance = std::numeric_limits<float>::infinity();
@@ -508,19 +519,15 @@ RayTriangleIntersection getClosestIntersection(glm::vec3 rayDirection, std::vect
 			intersection.intersectionPoint = intersect;
 			intersection.u = u;
 			intersection.v = v;
-
 		}
 	}
 
-	ModelTriangle triangle = intersection.intersectedTriangle;
 
-	if(triangle.mirror < 1.0 && !checkLocalColour) {
-		glm::vec3 normal = normalize(triangle.normal);
-		glm::vec3 reflectionRay = normalize(rayDirection - (normal * 2.0f * glm::dot(rayDirection, normal)));
-		intersection = getClosestRef(intersection.intersectionPoint, reflectionRay, triangles, intersection.triangleIndex, 1);
-		intersection.intersectedTriangle.mirror = triangle.mirror;
-			
-	}else if(triangle.refractInd != 1.0 && !checkLocalColour) {
+	ModelTriangle triangle = intersection.intersectedTriangle;
+	Colour localCol = intersection.intersectedTriangle.colour;
+
+	if(triangle.refractInd != 1.0) {
+
 
 		float refractiveIndex = triangle.refractInd;
 		glm::vec3 normal = normalize(triangle.normal);
@@ -532,7 +539,6 @@ RayTriangleIntersection getClosestIntersection(glm::vec3 rayDirection, std::vect
 		if (kr < 1){ // only compute refraction if not total internal reflection
 			glm::vec3 refractionRay = refract(rayDirection, normal, refractiveIndex);
 			refrRTI = getClosestRef(intersection.intersectionPoint, refractionRay, triangles, intersection.triangleIndex, 1);
-
 			refractCol = refrRTI.intersectedTriangle.colour;
 		}
 
@@ -543,7 +549,19 @@ RayTriangleIntersection getClosestIntersection(glm::vec3 rayDirection, std::vect
 		refrRTI.intersectedTriangle.colour = Colour(int((refractCol.red*kt)+(reflectCol.red*kr)),int((refractCol.green*kt)+(reflectCol.green*kr)),int((refractCol.blue*kt)+(reflectCol.blue*kr)));
 		intersection = refrRTI;
 
-	}
+	}else if(triangle.mirror < 1.0) {
+		glm::vec3 normal = normalize(triangle.normal);
+		glm::vec3 reflectionRay = normalize(rayDirection - (normal * 2.0f * glm::dot(rayDirection, normal)));
+		intersection = getClosestRef(intersection.intersectionPoint, reflectionRay, triangles, intersection.triangleIndex, 1);
+		intersection.intersectedTriangle.mirror = triangle.mirror;
+	} 
+
+	float d = intersection.intersectedTriangle.mirror;
+	Colour colour = intersection.intersectedTriangle.colour;
+	colour.red = (1-d) * colour.red + d * localCol.red;
+	colour.blue = (1-d) * colour.blue + d * localCol.blue;
+	colour.green = (1-d) * colour.green + d * localCol.green;
+	intersection.intersectedTriangle.colour = colour;
 	return intersection;
 }
 
@@ -636,7 +654,7 @@ void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangles, f
 		for(int y = 0; y < window.height; y++) {
 			glm::vec3 direction(x-float(window.width / 2), float(window.height / 2) - y, -focalLength*planeMultiplier);;
 			glm::vec3 ray = normalize(camOrientation * (direction-camPos));
-			RayTriangleIntersection intersection = getClosestIntersection(ray, triangles, false);
+			RayTriangleIntersection intersection = getClosestIntersection(ray, triangles);
 
 			Colour colour;
 
@@ -644,7 +662,7 @@ void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangles, f
 				float brightness = 0;
 				for (int i = 0; i < lights.size(); i++) {
 					float currentBrightness = 0;
-					if(!is_shadow(intersection, triangles, lights[i])){
+					if(!isShadow(intersection, triangles, lights[i])){
 						if (lightMode == 0){
 							glm::vec3 normal = intersection.intersectedTriangle.normal;
 							currentBrightness = getBrightness(intersection.intersectionPoint, normal, lights[i]);
@@ -674,27 +692,14 @@ void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangles, f
 					float x = fmod(ratioX, 1) * texture.width; //get co-ordinates
 					float y = texture.height - fmod(ratioY,1)*texture.height;
 					uint32_t c = texture.pixels[round(y)*texture.width + round(x)];
-					
                     uint8_t red = (c >> 16) & 0xff;
                     uint8_t green = (c >> 8) & 0xff;
                     uint8_t blue = c & 0xff;
 					colour = Colour(red, green, blue);
-				} else if (intersection.intersectedTriangle.mirror < 1.0) {
-					Colour localCol = getClosestIntersection(ray, triangles, true).intersectedTriangle.colour;
-					float d = intersection.intersectedTriangle.mirror;
-					colour = intersection.intersectedTriangle.colour;
-					colour.red = (1-d) * colour.red + d * localCol.red;
-					colour.blue = (1-d) * colour.blue + d * localCol.blue;
-					colour.green = (1-d) * colour.green + d * localCol.green;
-
 				}else{
 					colour = intersection.intersectedTriangle.colour;
 					
 				}
-
-				
-
-				
 
 				colour.red *= brightness;
 				colour.green *= brightness;
@@ -791,7 +796,7 @@ void handleEvent(SDL_Event event, DrawingWindow &window, int &renderMode, int &l
 
 		//orbit
 		else if (event.key.keysym.sym == SDLK_o) orbiting = (orbiting) ? false : true;
-		else if (event.key.keysym.sym == SDLK_r) reset_camera();
+		else if (event.key.keysym.sym == SDLK_r) resetCamera();
 
 		//render Mode
 		else if (event.key.keysym.sym == SDLK_0) renderMode = 0;
