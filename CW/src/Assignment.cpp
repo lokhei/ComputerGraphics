@@ -415,9 +415,7 @@ float fresnel(const glm::vec3 I, const glm::vec3 N, const float ior) {
         float Rp = ((etai * cosi) - (etat * cost)) / ((etai * cosi) + (etat * cost)); 
         kr = (Rs * Rs + Rp * Rp) / 2; 
     } 
-
 	return kr; //refraction
-   
     // transmittence is kt = 1 - kr;
    
 }
@@ -452,7 +450,7 @@ RayTriangleIntersection getClosestRef(glm::vec3 inter, glm::vec3 direction, std:
 			glm::mat3 DEMatrix(-direction, e0, e1);
 			glm::vec3 possibleSolution = glm::inverse(DEMatrix) * SPVector;
 			float t = possibleSolution.x, u = possibleSolution.y, v = possibleSolution.z;
-			if((u >= 0.0) && (u <= 1.0) && (v >= 0.0) && (v <= 1.0) && (u + v) <= 1.0 && intersection.distanceFromCamera > t && t > 0.0) {
+			if((u >= 0.0) && (u <= 1.0) && (v >= 0.0) && (v <= 1.0) && (u + v) <= 1.0 && intersection.distanceFromCamera >= t && t > 0.0) {
 				glm::vec3 intersect = triangle.vertices[0]+u*e0+v*e1;
 				intersection.intersectionPoint = intersect;
 				intersection.distanceFromCamera = t;
@@ -465,8 +463,9 @@ RayTriangleIntersection getClosestRef(glm::vec3 inter, glm::vec3 direction, std:
 	}
 
 	ModelTriangle triangle = intersection.intersectedTriangle;
-		Colour localCol = intersection.intersectedTriangle.colour;
+	Colour localCol = intersection.intersectedTriangle.colour;
 
+	float d = intersection.intersectedTriangle.mirror;
 
 	if(depth > 5) { //limit number of recursions
 		if(intersection.distanceFromCamera )
@@ -484,9 +483,8 @@ RayTriangleIntersection getClosestRef(glm::vec3 inter, glm::vec3 direction, std:
 		depth += 1;
 		intersection = getClosestRef(intersection.intersectionPoint, reflectionRay, triangles, intersection.triangleIndex, depth);
 	}
+	
 
-	intersection.intersectedTriangle.mirror = triangle.mirror;
-	float d = intersection.intersectedTriangle.mirror;
 	Colour colour = intersection.intersectedTriangle.colour;
 	colour.red = (1-d) * colour.red + d * localCol.red;
 	colour.blue = (1-d) * colour.blue + d * localCol.blue;
@@ -509,7 +507,7 @@ RayTriangleIntersection getClosestIntersection(glm::vec3 rayDirection, std::vect
 		glm::mat3 DEMatrix(-rayDirection, e0, e1);
 		glm::vec3 possibleSolution = glm::inverse(DEMatrix) * SPVector;
 		float t = possibleSolution.x, u = possibleSolution.y, v = possibleSolution.z;
-		if((u >=  0.0) && (u <= 1.0) && (v >= 0.0) && (v <= 1.0) && (u + v) <= 1.0 && t < distance && t > 0.0) {
+		if((u >=  0.0) && (u <= 1.0) && (v >= 0.0) && (v <= 1.0) && (u + v) <= 1.0 && t <= distance && t > 0.0) {
 			glm::vec3 intersect = triangle.vertices[0]+u*e0+v*e1;
 			distance = t;
 			intersection.distanceFromCamera = t;
@@ -525,10 +523,10 @@ RayTriangleIntersection getClosestIntersection(glm::vec3 rayDirection, std::vect
 
 	ModelTriangle triangle = intersection.intersectedTriangle;
 	Colour localCol = intersection.intersectedTriangle.colour;
+	float d = intersection.intersectedTriangle.mirror;
+
 
 	if(triangle.refractInd != 1.0) {
-
-
 		float refractiveIndex = triangle.refractInd;
 		glm::vec3 normal = normalize(triangle.normal);
 		float kr = fresnel(rayDirection, normal, refractiveIndex);
@@ -553,15 +551,15 @@ RayTriangleIntersection getClosestIntersection(glm::vec3 rayDirection, std::vect
 		glm::vec3 normal = normalize(triangle.normal);
 		glm::vec3 reflectionRay = normalize(rayDirection - (normal * 2.0f * glm::dot(rayDirection, normal)));
 		intersection = getClosestRef(intersection.intersectionPoint, reflectionRay, triangles, intersection.triangleIndex, 1);
-		intersection.intersectedTriangle.mirror = triangle.mirror;
 	} 
 
-	float d = intersection.intersectedTriangle.mirror;
+
 	Colour colour = intersection.intersectedTriangle.colour;
 	colour.red = (1-d) * colour.red + d * localCol.red;
 	colour.blue = (1-d) * colour.blue + d * localCol.blue;
 	colour.green = (1-d) * colour.green + d * localCol.green;
 	intersection.intersectedTriangle.colour = colour;
+
 	return intersection;
 }
 
@@ -698,6 +696,7 @@ void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangles, f
 					colour = Colour(red, green, blue);
 				}else{
 					colour = intersection.intersectedTriangle.colour;
+
 					
 				}
 
