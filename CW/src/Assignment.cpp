@@ -57,9 +57,9 @@ bool specular = true;
 
 
 void initialiseLights(int size){
-	// glm::vec3 light(1.0, 1.3, 2.8);  //sphere
+	glm::vec3 light(1.0, 1.3, 2.8);  //sphere
 
-	glm::vec3 light(0.0,1.0,0.5);
+	// glm::vec3 light(0.0,1.0,0.5);
 	lights.push_back(light);
 	// for (int i=0; i<size; i++) {
 	// 	float j = (i + 1) * 0.025;
@@ -595,27 +595,35 @@ float gouraud(RayTriangleIntersection intersection, glm::vec3 light) {
 	glm::vec3 cameraRay = glm::normalize(camOrientation * (camPos - intersection.intersectionPoint));
 
 	ModelTriangle triangle = intersection.intersectedTriangle;
-	
-	std::vector<glm::vec3> reflections;
-	std::vector<float> incidences;
 
-	float brightness = proximity ? intensity/(4 * M_PI * length*length) : 1.0; //proximity lighting
+
+	std::vector<float> brightnesses;
+	
+	// std::vector<glm::vec3> reflections;
+	// std::vector<float> incidences;
+
 
 	for(int i = 0; i < triangle.vertexNormals.size(); i++) {
-		incidences.push_back(glm::dot(triangle.vertexNormals[i], glm::normalize(lightRay)));
-		reflections.push_back(glm::normalize(glm::normalize(lightRay) - ((2.0f*triangle.vertexNormals[i])*glm::dot(glm::normalize(lightRay), triangle.vertexNormals[i]))));
+		float brightness = proximity ? intensity/(4 * M_PI * length*length) : 1.0; //proximity lighting
+		float incidence = glm::dot(triangle.vertexNormals[i], glm::normalize(lightRay));
+		brightness *= std::max(0.0f, incidence);
+
+		glm::vec3 reflection =  glm::normalize(glm::normalize(lightRay) - ((2.0f*triangle.vertexNormals[i])*glm::dot(glm::normalize(lightRay), triangle.vertexNormals[i])));
+		float specular = std::pow(glm::dot(reflection, glm::normalize(cameraRay)), specularScale);
+
+		brightness += std::max(0.0f, specular*0.2f);
+
+		brightnesses.push_back(brightness);
+
 	}
-	float angleOfIncidence = incidence ? (1 - intersection.u - intersection.v) * incidences[0] + intersection.u * incidences[1] + intersection.v * incidences[2] : 1.0;
-	brightness *= std::max(0.0f, angleOfIncidence); 
 
-	glm::vec3 angleOfReflection = (1 - intersection.u - intersection.v) * reflections[0] + intersection.u * reflections[1] + intersection.v * reflections[2];
-	float specularLighting = specular ? std::pow(glm::dot(angleOfReflection, cameraRay), specularScale) : 0.0;
-
-	brightness += std::max(0.0f, specularLighting);
-	brightness = std::max(0.2f, std::min(1.0f, brightness));
+	float finalBrightness = (1 - intersection.u - intersection.v) * brightnesses[0] + intersection.u * brightnesses[1] + intersection.v * brightnesses[2];
 
 	
-	return brightness;
+	finalBrightness = std::max(0.2f, std::min(1.0f, finalBrightness));
+
+
+	return finalBrightness;
 }
 
 float phong(RayTriangleIntersection intersection, glm::vec3 light) {
@@ -816,6 +824,10 @@ void handleEvent(SDL_Event event, DrawingWindow &window, int &renderMode, int &l
 	}
 }
 
+void animate(std::vector<ModelTriangle> &triangles, DrawingWindow &window, std::unordered_map<std::string, TextureMap> &textures) {
+
+}
+
 int main(int argc, char *argv[]) {
 	DrawingWindow window = DrawingWindow(WIDTH, HEIGHT, false);
 	SDL_Event event;
@@ -830,7 +842,7 @@ int main(int argc, char *argv[]) {
 	
 	// std::vector<ModelTriangle> triangles = loadObjFile("logo.obj", 0.003, textures);
 	// std::vector<ModelTriangle> triangles = loadObjFile("textured-cornell-box.obj", vertexScale, textures);
-	std::vector<ModelTriangle> triangles = loadObjFile("cornell-box.obj", vertexScale, textures);
+	// std::vector<ModelTriangle> triangles = loadObjFile("cornell-box.obj", vertexScale, textures);
 	// std::vector<ModelTriangle> triangles = loadObjFile("cornell-bunny.obj", vertexScale, textures);
 
 	// std::vector<ModelTriangle> triangles = loadObjFile("comp-cornell.obj", vertexScale, textures);
@@ -840,10 +852,13 @@ int main(int argc, char *argv[]) {
 
 
 	// std::vector<ModelTriangle> triangles = loadObjFile("high-res-sphere.obj", 0.3, textures);
-	//  std::vector<ModelTriangle> sphere = loadObjFile("sphere.obj", vertexScale, textures);
+	 std::vector<ModelTriangle> triangles = loadObjFile("sphere.obj", vertexScale, textures);
 
 	// triangles.insert(triangles.end(), sphere.begin(), sphere.end());
 	// triangles.insert(triangles.end(), logo.begin(), logo.end());
+
+
+	animate(triangles, window, textures);
 
 	float focalLength = 2.0;
 	while (true) {
