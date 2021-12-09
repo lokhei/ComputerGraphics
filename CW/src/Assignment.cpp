@@ -840,7 +840,7 @@ void animate(std::vector<ModelTriangle> &triangles, DrawingWindow &window, std::
 	}
 
 	// rasterise
-	for(int i = 0; i < 180; i++) {
+	for(int i = 0; i < 200; i++) {
 		drawRasterisedScene(window, triangles, 1);
 		std::string name = std::string(n_zero - std::to_string(frames).length(), '0') + std::to_string(frames);
 		window.savePPM("output/"+name+".ppm");
@@ -864,18 +864,19 @@ void animate(std::vector<ModelTriangle> &triangles, DrawingWindow &window, std::
 		}else if(i < 108) {
 			camPos.z += 0.075;
 		}else if (i < 120){
-			camPos = rotateY(0.1) * camPos; //rotate Y C
+			camPos = rotateY(0.05) * camPos; //rotate Y C
 		}else if (i < 132){
-			camPos = rotateY(-0.1) * camPos;
+			camPos = rotateY(-0.05) * camPos;
 		}else if (i < 144){
-			camPos = rotateX(0.1) * camPos;
+			camPos = rotateX(0.05) * camPos;
 		}else if (i < 156){
-			camPos = rotateX(-0.1) * camPos; 
-		}else if (i < 168){
+			camPos = rotateX(-0.05) * camPos; 
+		}else if (i < 200){
 			orbit(true); 
 		}
 		frames++;
 	}
+	resetCamera();
 
 	//raytrace
 	for(int i = 0; i < 48; i++) {
@@ -883,8 +884,8 @@ void animate(std::vector<ModelTriangle> &triangles, DrawingWindow &window, std::
 		
 		if(i < 12) {
 			drawRayTrace(window, triangles, 2, textures);
-		}else if (i < 24){
-			softShadows = !softShadows; 
+		}else if (i == 12){
+			softShadows = true; 
 			initialiseLights(3);
 		}
 		
@@ -892,6 +893,9 @@ void animate(std::vector<ModelTriangle> &triangles, DrawingWindow &window, std::
 		std::cout << "saved " << frames << std::endl;
 		frames++;
 	}
+
+
+	std::cout << "finished";
 
 }
 
@@ -925,7 +929,7 @@ int main(int argc, char *argv[]) {
 	// triangles.insert(triangles.end(), logo.begin(), logo.end());
 
 
-	// animate(triangles, window, textures);
+	animate(triangles, window, textures);
 
 	while (true) {
 		if (window.pollForInputEvents(event)){
