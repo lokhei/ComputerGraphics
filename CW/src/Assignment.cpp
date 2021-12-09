@@ -20,9 +20,11 @@
 #define HEIGHT 480
 
 bool orbiting = false;
+float focalLength = 2.0;
+bool softShadows = false;
 
 glm::vec3 camPos(0.0, 0.0, 4.0);
-glm::vec3 light(1.0, 1.0, 2.0);
+// glm::vec3 light(1.0, 1.0, 2.0);
 
 
 struct ColourProps{
@@ -55,23 +57,26 @@ bool proximity = true;
 bool incidence = true;
 bool specular = true;
 
+glm::vec3 light(0.0,1.0,0.5);
 
 void initialiseLights(int size){
-	glm::vec3 light(1.0, 1.3, 2.8);  //sphere
+	// glm::vec3 light(1.0, 1.3, 2.8);  //sphere
 
 	// glm::vec3 light(0.0,1.0,0.5);
-	lights.push_back(light);
-	// for (int i=0; i<size; i++) {
-	// 	float j = (i + 1) * 0.025;
-	// 	lights.push_back(light + glm::vec3(j, j, j));
-	// 	lights.push_back(light + glm::vec3(j, j, -j));
-	// 	lights.push_back(light + glm::vec3(j, -j, j));
-	// 	lights.push_back(light + glm::vec3(-j, j, j));
-	// 	lights.push_back(light + glm::vec3(j, -j, -j));
-	// 	lights.push_back(light + glm::vec3(-j, j, -j));
-	// 	lights.push_back(light + glm::vec3(-j, -j, j));
-	// 	lights.push_back(light + glm::vec3(-j, -j, -j));
-	// }
+	lights = {light};
+	if (softShadows){
+		for (int i=0; i<size; i++) {
+			float j = (i + 1) * 0.025;
+			lights.push_back(light + glm::vec3(j, j, j));
+			lights.push_back(light + glm::vec3(j, j, -j));
+			lights.push_back(light + glm::vec3(j, -j, j));
+			lights.push_back(light + glm::vec3(-j, j, j));
+			lights.push_back(light + glm::vec3(j, -j, -j));
+			lights.push_back(light + glm::vec3(-j, j, -j));
+			lights.push_back(light + glm::vec3(-j, -j, j));
+			lights.push_back(light + glm::vec3(-j, -j, -j));
+		}
+	}
 }
 
 std::unordered_map<std::string, ColourProps> loadMtlFile(const std::string &filename, std::unordered_map<std::string, TextureMap> &textures) {
@@ -324,7 +329,7 @@ void drawTexturedTriangle(DrawingWindow &window, CanvasTriangle triangle, Textur
 
 
 
-CanvasPoint getCanvasIntersectionPoint(DrawingWindow &window, glm::vec3 vertexPosition, float focalLength){
+CanvasPoint getCanvasIntersectionPoint(DrawingWindow &window, glm::vec3 vertexPosition){
 	glm::vec3 vertex = (vertexPosition - camPos) * camOrientation; //camera co-ordinate system
 	float u = -round(planeMultiplier*focalLength * (vertex.x / vertex.z)) + (window.width / 2);
 	float v = round(planeMultiplier*focalLength * (vertex.y / vertex.z)) + (window.height / 2);
@@ -450,7 +455,7 @@ RayTriangleIntersection getClosestRef(glm::vec3 inter, glm::vec3 direction, std:
 			glm::mat3 DEMatrix(-direction, e0, e1);
 			glm::vec3 possibleSolution = glm::inverse(DEMatrix) * SPVector;
 			float t = possibleSolution.x, u = possibleSolution.y, v = possibleSolution.z;
-			if((u >= 0.0) && (u <= 1.0) && (v >= 0.0) && (v <= 1.0) && (u + v) <= 1.0 && intersection.distanceFromCamera >= t && t > 0.0) {
+			if((u >= 0.0) && (u <= 1.0) && (v >= 0.0) && (v <= 1.0) && (u + v) <= 1.0 && intersection.distanceFromCamera > t && t > 0.0) {
 				glm::vec3 intersect = triangle.vertices[0]+u*e0+v*e1;
 				intersection.intersectionPoint = intersect;
 				intersection.distanceFromCamera = t;
@@ -494,7 +499,7 @@ RayTriangleIntersection getClosestRef(glm::vec3 inter, glm::vec3 direction, std:
 }
 
 
-RayTriangleIntersection getClosestIntersection(glm::vec3 rayDirection, std::vector<ModelTriangle> triangles) {
+RayTriangleIntersection getClosestIntersection(glm::vec3 rayDirection, std::vector<ModelTriangle> triangles, bool checkLocalCol) {
 	RayTriangleIntersection intersection;
 	intersection.distanceFromCamera = std::numeric_limits<float>::infinity();
 	float distance = std::numeric_limits<float>::infinity();
@@ -525,8 +530,7 @@ RayTriangleIntersection getClosestIntersection(glm::vec3 rayDirection, std::vect
 	Colour localCol = intersection.intersectedTriangle.colour;
 	float d = intersection.intersectedTriangle.mirror;
 
-
-	if(triangle.refractInd != 1.0) {
+	if(triangle.refractInd != 1.0 && !checkLocalCol) {
 		float refractiveIndex = triangle.refractInd;
 		glm::vec3 normal = normalize(triangle.normal);
 		float kr = fresnel(rayDirection, normal, refractiveIndex);
@@ -547,7 +551,7 @@ RayTriangleIntersection getClosestIntersection(glm::vec3 rayDirection, std::vect
 		refrRTI.intersectedTriangle.colour = Colour(int((refractCol.red*kt)+(reflectCol.red*kr)),int((refractCol.green*kt)+(reflectCol.green*kr)),int((refractCol.blue*kt)+(reflectCol.blue*kr)));
 		intersection = refrRTI;
 
-	}else if(triangle.mirror < 1.0) {
+	}else if(triangle.mirror < 1.0 && !checkLocalCol) {
 		glm::vec3 normal = normalize(triangle.normal);
 		glm::vec3 reflectionRay = normalize(rayDirection - (normal * 2.0f * glm::dot(rayDirection, normal)));
 		intersection = getClosestRef(intersection.intersectionPoint, reflectionRay, triangles, intersection.triangleIndex, 1);
@@ -595,14 +599,8 @@ float gouraud(RayTriangleIntersection intersection, glm::vec3 light) {
 	glm::vec3 cameraRay = glm::normalize(camOrientation * (camPos - intersection.intersectionPoint));
 
 	ModelTriangle triangle = intersection.intersectedTriangle;
-
-
 	std::vector<float> brightnesses;
 	
-	// std::vector<glm::vec3> reflections;
-	// std::vector<float> incidences;
-
-
 	for(int i = 0; i < triangle.vertexNormals.size(); i++) {
 		float brightness = proximity ? intensity/(4 * M_PI * length*length) : 1.0; //proximity lighting
 		float incidence = glm::dot(triangle.vertexNormals[i], glm::normalize(lightRay));
@@ -612,16 +610,11 @@ float gouraud(RayTriangleIntersection intersection, glm::vec3 light) {
 		float specular = std::pow(glm::dot(reflection, glm::normalize(cameraRay)), specularScale);
 
 		brightness += std::max(0.0f, specular*0.2f);
-
 		brightnesses.push_back(brightness);
-
 	}
 
 	float finalBrightness = (1 - intersection.u - intersection.v) * brightnesses[0] + intersection.u * brightnesses[1] + intersection.v * brightnesses[2];
-
-	
 	finalBrightness = std::max(0.2f, std::min(1.0f, finalBrightness));
-
 
 	return finalBrightness;
 }
@@ -643,7 +636,6 @@ float phong(RayTriangleIntersection intersection, glm::vec3 light) {
 	float angleOfIncidence =  incidence ? glm::dot(glm::normalize(lightRay),glm::normalize(normal)) : 1.0;
 	brightness *= std::max(0.0f, angleOfIncidence); 
 
-
 	glm::vec3 angleOfReflection = glm::normalize(glm::normalize(lightRay) - (glm::normalize(normal)*2.0f*glm::dot(glm::normalize(lightRay), glm::normalize(normal))));
 	float specularLighting = specular ? std::pow(glm::dot(angleOfReflection, cameraRay), specularScale) : 0.0; // Specular Lighting
 
@@ -653,14 +645,14 @@ float phong(RayTriangleIntersection intersection, glm::vec3 light) {
 	return brightness;
 }
 
-void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangles, float focalLength, int lightMode, std::unordered_map<std::string, TextureMap> textures) {
+void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangles, int lightMode, std::unordered_map<std::string, TextureMap> textures) {
 	window.clearPixels();
 	orbit(orbiting); 
 	for(int x = 0; x < window.width; x++) {
 		for(int y = 0; y < window.height; y++) {
 			glm::vec3 direction(x-float(window.width / 2), float(window.height / 2) - y, -focalLength*planeMultiplier);;
 			glm::vec3 ray = normalize(camOrientation * (direction-camPos));
-			RayTriangleIntersection intersection = getClosestIntersection(ray, triangles);
+			RayTriangleIntersection intersection = getClosestIntersection(ray, triangles, false);
 
 			Colour colour;
 
@@ -704,9 +696,8 @@ void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangles, f
 					colour = Colour(red, green, blue);
 				}else{
 					colour = intersection.intersectedTriangle.colour;
-
-					
 				}
+
 
 				colour.red *= brightness;
 				colour.green *= brightness;
@@ -722,7 +713,7 @@ void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangles, f
 }
 
 
-void drawRasterisedScene(DrawingWindow &window, std::vector<ModelTriangle> faces, float focalLength, int renderMode) {
+void drawRasterisedScene(DrawingWindow &window, std::vector<ModelTriangle> faces, int renderMode) {
 	window.clearPixels();
 	orbit(orbiting); 
 	std::vector<std::vector<float>> depthBuffer (window.height, std::vector<float>(window.width, 0));
@@ -732,7 +723,7 @@ void drawRasterisedScene(DrawingWindow &window, std::vector<ModelTriangle> faces
 		CanvasTriangle triangle = CanvasTriangle();
 		for (int j=0; j<face.vertices.size(); j++) {
 			glm::vec3 vertexPosition = face.vertices[j];
-			triangle.vertices[j] = getCanvasIntersectionPoint(window,vertexPosition,focalLength);
+			triangle.vertices[j] = getCanvasIntersectionPoint(window,vertexPosition);
 		}
 		
 		if (renderMode == 0) {
@@ -817,6 +808,13 @@ void handleEvent(SDL_Event event, DrawingWindow &window, int &renderMode, int &l
 		else if (event.key.keysym.sym == SDLK_7) incidence = !incidence; 
 		else if (event.key.keysym.sym == SDLK_8) specular = !specular;
 
+		else if (event.key.keysym.sym == SDLK_h) {
+			softShadows = !softShadows; 
+			initialiseLights(3);
+		}// turn on soft shadows
+
+
+
 
 	} else if (event.type == SDL_MOUSEBUTTONDOWN) {
 		window.savePPM("output.ppm");
@@ -825,6 +823,75 @@ void handleEvent(SDL_Event event, DrawingWindow &window, int &renderMode, int &l
 }
 
 void animate(std::vector<ModelTriangle> &triangles, DrawingWindow &window, std::unordered_map<std::string, TextureMap> &textures) {
+	/*
+	~/Downloads/ffmpeg-git-20211203-amd64-static/ffmpeg -framerate 10 -pattern_type glob -i '*.ppm'   -c:v libx264 -pix_fmt yuv420p video.mp4
+	*/
+	
+	int n_zero = 5;
+	int frames = 0;
+
+	//wireframe
+	for(int i = 0; i < 15; i++) {
+		drawRasterisedScene(window, triangles, 0);
+		std::string name = std::string(n_zero - std::to_string(frames).length(), '0') + std::to_string(frames);
+		window.savePPM("output/"+name+".ppm");
+		std::cout << "saved " << frames << std::endl;
+		frames++;
+	}
+
+	// rasterise
+	for(int i = 0; i < 180; i++) {
+		drawRasterisedScene(window, triangles, 1);
+		std::string name = std::string(n_zero - std::to_string(frames).length(), '0') + std::to_string(frames);
+		window.savePPM("output/"+name+".ppm");
+		std::cout << "saved " << frames << std::endl;
+		if(i < 12) {
+			camPos.x -= 0.075;
+		}
+		else if(i < 36) {
+			camPos.x += 0.075;
+		}
+		else if(i < 48) {
+			camPos.x -= 0.075;
+		}else if(i < 60) {
+			camPos.y -= 0.075;
+		}
+		else if(i < 72) {
+			camPos.y += 0.075;
+		}
+		else if(i < 96) {
+			camPos.z -= 0.075;
+		}else if(i < 108) {
+			camPos.z += 0.075;
+		}else if (i < 120){
+			camPos = rotateY(0.1) * camPos; //rotate Y C
+		}else if (i < 132){
+			camPos = rotateY(-0.1) * camPos;
+		}else if (i < 144){
+			camPos = rotateX(0.1) * camPos;
+		}else if (i < 156){
+			camPos = rotateX(-0.1) * camPos; 
+		}else if (i < 168){
+			orbit(true); 
+		}
+		frames++;
+	}
+
+	//raytrace
+	for(int i = 0; i < 48; i++) {
+		std::string name = std::string(n_zero - std::to_string(frames).length(), '0') + std::to_string(frames);
+		
+		if(i < 12) {
+			drawRayTrace(window, triangles, 2, textures);
+		}else if (i < 24){
+			softShadows = !softShadows; 
+			initialiseLights(3);
+		}
+		
+		window.savePPM("output/"+name+".ppm");
+		std::cout << "saved " << frames << std::endl;
+		frames++;
+	}
 
 }
 
@@ -842,7 +909,7 @@ int main(int argc, char *argv[]) {
 	
 	// std::vector<ModelTriangle> triangles = loadObjFile("logo.obj", 0.003, textures);
 	// std::vector<ModelTriangle> triangles = loadObjFile("textured-cornell-box.obj", vertexScale, textures);
-	// std::vector<ModelTriangle> triangles = loadObjFile("cornell-box.obj", vertexScale, textures);
+	std::vector<ModelTriangle> triangles = loadObjFile("cornell-box.obj", vertexScale, textures);
 	// std::vector<ModelTriangle> triangles = loadObjFile("cornell-bunny.obj", vertexScale, textures);
 
 	// std::vector<ModelTriangle> triangles = loadObjFile("comp-cornell.obj", vertexScale, textures);
@@ -852,21 +919,20 @@ int main(int argc, char *argv[]) {
 
 
 	// std::vector<ModelTriangle> triangles = loadObjFile("high-res-sphere.obj", 0.3, textures);
-	 std::vector<ModelTriangle> triangles = loadObjFile("sphere.obj", vertexScale, textures);
+	//  std::vector<ModelTriangle> triangles = loadObjFile("sphere.obj", vertexScale, textures);
 
 	// triangles.insert(triangles.end(), sphere.begin(), sphere.end());
 	// triangles.insert(triangles.end(), logo.begin(), logo.end());
 
 
-	animate(triangles, window, textures);
+	// animate(triangles, window, textures);
 
-	float focalLength = 2.0;
 	while (true) {
 		if (window.pollForInputEvents(event)){
 			handleEvent(event, window, renderMode, lightMode);
 		}
-		if (renderMode == 2) drawRayTrace(window, triangles, focalLength, lightMode, textures);
-		else drawRasterisedScene(window, triangles, focalLength, renderMode);
+		if (renderMode == 2) drawRayTrace(window, triangles, lightMode, textures);
+		else drawRasterisedScene(window, triangles, renderMode);
 
 		window.renderFrame();
 	}

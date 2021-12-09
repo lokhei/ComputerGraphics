@@ -12,28 +12,30 @@ Kd 0.000000 1.000000 0.000000
 
 newmtl Blue
 Kd 0.000000 0.000000 1.000000
-d 0.5
-
 
 newmtl Yellow
 Kd 1.000000 1.000000 0.000000
+d 0.7
 
 newmtl Magenta
 Kd 1.000000 0.000000 1.000000
+d 0.7
+
 
 newmtl Cyan
 Kd 0.000000 1.000000 1.000000
+d 0.7
 
-newmtl BlueMirror
-Kd 0.0000000 0.000000 1.000000 
-d 0.0
+
+newmtl Mirror
+Kd 1.0000000 0.000000 0.500000 
 
 newmtl Glass
 Kd 1.000000 0.000000 0.000000
-Ni 1.5
-d 0.0
-
 
 newmtl Diamond
 Kd 0.000000 1.000000 1.000000
-Ni 1.8
+
+newmtl Marble
+Kd 0.000000 1.000000 0.000000
+map_Kd texture3.ppm
