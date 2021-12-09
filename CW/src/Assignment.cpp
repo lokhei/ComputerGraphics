@@ -22,6 +22,7 @@
 bool orbiting = false;
 float focalLength = 2.0;
 bool softShadows = false;
+bool hardShadow = false;
 
 glm::vec3 camPos(0.0, 0.0, 4.0);
 // glm::vec3 light(1.0, 1.0, 2.0);
@@ -669,14 +670,10 @@ void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangles, i
 						}else {
 							currentBrightness = phong(intersection, lights[i]);
 						}
-					}else{
-						// currentBrightness = intersection.intersectedTriangle.refract ? 0.3 : 0.18	; //shadow brightness ????
+					}else if (hardShadow || softShadows){
 						brightness +=  0.18	; //shadow brightness
-
 					}
-					// if (intersection.intersectedTriangle.mirror) {
-					// 	currentBrightness *= 0.2;
-					// }
+				
 					brightness += currentBrightness;
 				}
 				brightness /= lights.size();
@@ -813,6 +810,11 @@ void handleEvent(SDL_Event event, DrawingWindow &window, int &renderMode, int &l
 			initialiseLights(3);
 		}// turn on soft shadows
 
+		
+		else if (event.key.keysym.sym == SDLK_g) {
+			softShadows = !hardShadow; 
+		}
+
 
 
 
@@ -839,43 +841,43 @@ void animate(std::vector<ModelTriangle> &triangles, DrawingWindow &window, std::
 		frames++;
 	}
 
-	// rasterise
-	for(int i = 0; i < 200; i++) {
-		drawRasterisedScene(window, triangles, 1);
-		std::string name = std::string(n_zero - std::to_string(frames).length(), '0') + std::to_string(frames);
-		window.savePPM("output/"+name+".ppm");
-		std::cout << "saved " << frames << std::endl;
-		if(i < 12) {
-			camPos.x -= 0.075;
-		}
-		else if(i < 36) {
-			camPos.x += 0.075;
-		}
-		else if(i < 48) {
-			camPos.x -= 0.075;
-		}else if(i < 60) {
-			camPos.y -= 0.075;
-		}
-		else if(i < 72) {
-			camPos.y += 0.075;
-		}
-		else if(i < 96) {
-			camPos.z -= 0.075;
-		}else if(i < 108) {
-			camPos.z += 0.075;
-		}else if (i < 120){
-			camPos = rotateY(0.05) * camPos; //rotate Y C
-		}else if (i < 132){
-			camPos = rotateY(-0.05) * camPos;
-		}else if (i < 144){
-			camPos = rotateX(0.05) * camPos;
-		}else if (i < 156){
-			camPos = rotateX(-0.05) * camPos; 
-		}else if (i < 200){
-			orbit(true); 
-		}
-		frames++;
-	}
+	// // rasterise
+	// for(int i = 0; i < 200; i++) {
+	// 	drawRasterisedScene(window, triangles, 1);
+	// 	std::string name = std::string(n_zero - std::to_string(frames).length(), '0') + std::to_string(frames);
+	// 	window.savePPM("output/"+name+".ppm");
+	// 	std::cout << "saved " << frames << std::endl;
+	// 	if(i < 12) {
+	// 		camPos.x -= 0.075;
+	// 	}
+	// 	else if(i < 36) {
+	// 		camPos.x += 0.075;
+	// 	}
+	// 	else if(i < 48) {
+	// 		camPos.x -= 0.075;
+	// 	}else if(i < 60) {
+	// 		camPos.y -= 0.075;
+	// 	}
+	// 	else if(i < 72) {
+	// 		camPos.y += 0.075;
+	// 	}
+	// 	else if(i < 96) {
+	// 		camPos.z -= 0.075;
+	// 	}else if(i < 108) {
+	// 		camPos.z += 0.075;
+	// 	}else if (i < 120){
+	// 		camPos = rotateY(0.05) * camPos; //rotate Y C
+	// 	}else if (i < 132){
+	// 		camPos = rotateY(-0.05) * camPos;
+	// 	}else if (i < 144){
+	// 		camPos = rotateX(0.05) * camPos;
+	// 	}else if (i < 156){
+	// 		camPos = rotateX(-0.05) * camPos; 
+	// 	}else if (i < 200){
+	// 		orbit(true); 
+	// 	}
+	// 	frames++;
+	// }
 	resetCamera();
 
 	//raytrace
@@ -887,6 +889,8 @@ void animate(std::vector<ModelTriangle> &triangles, DrawingWindow &window, std::
 		}else if (i == 12){
 			softShadows = true; 
 			initialiseLights(3);
+			drawRayTrace(window, triangles, 2, textures);
+
 		}
 		
 		window.savePPM("output/"+name+".ppm");
@@ -909,7 +913,43 @@ int main(int argc, char *argv[]) {
 
 	initialiseLights(3);
 
-	std::unordered_map<std::string, TextureMap> textures;
+	std::unordered_map<std::string, TextureMap> textures;// rasterise
+	// for(int i = 0; i < 200; i++) {
+	// 	drawRasterisedScene(window, triangles, 1);
+	// 	std::string name = std::string(n_zero - std::to_string(frames).length(), '0') + std::to_string(frames);
+	// 	window.savePPM("output/"+name+".ppm");
+	// 	std::cout << "saved " << frames << std::endl;
+	// 	if(i < 12) {
+	// 		camPos.x -= 0.075;
+	// 	}
+	// 	else if(i < 36) {
+	// 		camPos.x += 0.075;
+	// 	}
+	// 	else if(i < 48) {
+	// 		camPos.x -= 0.075;
+	// 	}else if(i < 60) {
+	// 		camPos.y -= 0.075;
+	// 	}
+	// 	else if(i < 72) {
+	// 		camPos.y += 0.075;
+	// 	}
+	// 	else if(i < 96) {
+	// 		camPos.z -= 0.075;
+	// 	}else if(i < 108) {
+	// 		camPos.z += 0.075;
+	// 	}else if (i < 120){
+	// 		camPos = rotateY(0.05) * camPos; //rotate Y C
+	// 	}else if (i < 132){
+	// 		camPos = rotateY(-0.05) * camPos;
+	// 	}else if (i < 144){
+	// 		camPos = rotateX(0.05) * camPos;
+	// 	}else if (i < 156){
+	// 		camPos = rotateX(-0.05) * camPos; 
+	// 	}else if (i < 200){
+	// 		orbit(true); 
+	// 	}
+	// 	frames++;
+	// }
 	
 	// std::vector<ModelTriangle> triangles = loadObjFile("logo.obj", 0.003, textures);
 	// std::vector<ModelTriangle> triangles = loadObjFile("textured-cornell-box.obj", vertexScale, textures);
