@@ -27,7 +27,9 @@ bool hardShadow = true;
 
 
 glm::vec3 camPos(0.0, 0.0, 4.0);
-glm::vec3 light(1.0, 1.0, 2.0);
+// glm::vec3 light(1.0, 1.0, 2.0);
+	glm::vec3 light(0.0,1.0,0.5);
+
 
 
 struct ColourProps{
@@ -289,7 +291,7 @@ void drawTexturedTriangle(DrawingWindow &window, CanvasTriangle triangle, Textur
 	sortTriangle(triangle);
 	std :: vector<CanvasPoint> xStart = interpolateRoundPoints(triangle[0], triangle[1], triangle[1].y - triangle[0].y + 1);
 	if (triangle[2].y - triangle[1].y + 1 > 1){
-		xStart.pop_back();
+		xStart.pop_back(); //dupl row
 		std :: vector<CanvasPoint> xStart2 = interpolateRoundPoints(triangle[1], triangle[2], triangle[2].y - triangle[1].y + 1);
 		xStart.insert(xStart.end(), xStart2.begin(), xStart2.end());
 	}
@@ -428,12 +430,30 @@ float fresnel(const glm::vec3 I, const glm::vec3 N, const float ior) {
 
 glm::vec3 refract(glm::vec3 incidence, glm::vec3 N, float refractiveIndex) {
 	
-	float cosTheta = dot(incidence, N); //cos_theta
-	float invEta = refractiveIndex; //etat/etai
-	if(cosTheta > 0) {
-		invEta = 1.0/refractiveIndex; 
+	 float etai = 1.0; //refractive index of air
+    float etat = refractiveIndex; //refractive index of material
+    float cos_theta = glm::dot(N, incidence); //N . I
+	cos_theta = (cos_theta < -1) ? -1 : ((cos_theta > 1) ? 1 : cos_theta); //clamp values between -1 and 1
+    float eta = etai / etat;
+
+	glm::vec3 n = N; 
+    if (cos_theta < 0) {
+        // outside surface
+        cos_theta = -cos_theta; // make cos_theta +ve
+    } else {
+        // inside surface
+		eta = 1/eta;
+        n = -N; //reverse normal direction
+    }
+
+	float c_2 = 1 - eta*eta * (1 - cos_theta * cos_theta);
+	if(c_2 < 0) { //total internal refraction
+		return normalize(incidence - n * 2.0f * cos_theta); // return reflected ray
 	}
-	return normalize(incidence * invEta - N * (-cosTheta + invEta*cosTheta));
+
+    glm::vec3 refracted_ray = eta * incidence + (eta * cos_theta - sqrtf(c_2)) * n;
+
+    return normalize(refracted_ray);
 }
 
 uint32_t raytraceTexture(RayTriangleIntersection intersection, TextureMap &texture) {
@@ -746,7 +766,6 @@ void drawRasterisedScene(DrawingWindow &window, std::vector<ModelTriangle> faces
 			drawStrokedTriangle(window, triangle, Colour(255, 255, 255), depthBuffer); //wireframe
 		}
 		else if (face.colour.name != "") {
-			
 
 			TextureMap texture(face.colour.name);
 			for(int j = 0; j < triangle.vertices.size(); j++) {
@@ -1034,9 +1053,9 @@ int main(int argc, char *argv[]) {
 	
 	// std::vector<ModelTriangle> triangles = loadObjFile("logo.obj", 0.003, textures);
 	// std::vector<ModelTriangle> triangles = loadObjFile("textured-cornell-box.obj", vertexScale, textures);
-	// std::vector<ModelTriangle> triangles = loadObjFile("cornell-box.obj", vertexScale, textures);
+	std::vector<ModelTriangle> triangles = loadObjFile("cornell-box.obj", vertexScale, textures);
 
-	std::vector<ModelTriangle> triangles = loadObjFile("comp-cornell.obj", vertexScale, textures);
+	// std::vector<ModelTriangle> triangles = loadObjFile("comp-cornell.obj", vertexScale, textures);
 
 
 	// std::vector<ModelTriangle> triangles = loadObjFile("empty-cornell.obj", vertexScale, textures);
@@ -1047,7 +1066,7 @@ int main(int argc, char *argv[]) {
 
 
 	//------uncomment for animation ----------
-	animate(window, textures);
+	// animate(window, textures);
 
 	while (true) {
 		if (window.pollForInputEvents(event)){
