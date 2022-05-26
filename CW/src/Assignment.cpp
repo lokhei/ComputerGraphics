@@ -27,8 +27,7 @@ bool hardShadow = true;
 
 
 glm::vec3 camPos(0.0, 0.0, 4.0);
-// glm::vec3 light(1.0, 1.0, 2.0);
-	glm::vec3 light(0.0,1.0,0.5);
+glm::vec3 light(0.0,1.0,0.5);
 
 
 
@@ -62,7 +61,6 @@ bool proximity = true;
 bool incidence = true;
 bool specular = true;
 
-// glm::vec3 light(0.0,1.0,1.0);
 
 void initialiseLights(int size){
 
@@ -859,10 +857,6 @@ void handleEvent(SDL_Event event, DrawingWindow &window, int &renderMode, int &l
 		}else if (event.key.keysym.sym == SDLK_v) moveLight(-0.1,-0.1,-0.1);
 
 
-
-
-
-
 	} else if (event.type == SDL_MOUSEBUTTONDOWN) {
 		window.savePPM("output.ppm");
 		window.saveBMP("output.bmp");
@@ -1012,8 +1006,6 @@ void animate(DrawingWindow &window, std::unordered_map<std::string, TextureMap> 
 	triangles = loadObjFile("comp-cornell.obj", 0.5, textures);
 	proximity = specular = incidence = true;
 
-	// frames = 228;
-
 	for(int i = 0; i < 10; i++) {
 		std::string name = std::string(n_zero - std::to_string(frames).length(), '0') + std::to_string(frames);
 		if(i < 12) {
@@ -1051,16 +1043,14 @@ int main(int argc, char *argv[]) {
 
 	std::unordered_map<std::string, TextureMap> textures;// rasterise
 	
+	// ------- Choose obj file to load in ---------------
+	
 	// std::vector<ModelTriangle> triangles = loadObjFile("logo.obj", 0.003, textures);
 	// std::vector<ModelTriangle> triangles = loadObjFile("textured-cornell-box.obj", vertexScale, textures);
 	std::vector<ModelTriangle> triangles = loadObjFile("cornell-box.obj", vertexScale, textures);
 
 	// std::vector<ModelTriangle> triangles = loadObjFile("comp-cornell.obj", vertexScale, textures);
-
-
 	// std::vector<ModelTriangle> triangles = loadObjFile("empty-cornell.obj", vertexScale, textures);
-
-
 	// std::vector<ModelTriangle> triangles = loadObjFile("high-res-sphere.obj", 0.3, textures);
 	//  std::vector<ModelTriangle> triangles = loadObjFile("sphere.obj", vertexScale, textures);
 
