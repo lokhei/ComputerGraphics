@@ -5,6 +5,7 @@ COMS30020 Computer Graphics Coursework
 Building a C++ renderer using a variety of different approaches to 3D rendering
 
 ## Animation
+![Animation](https://github.com/lokhei/ComputerGraphics/tree/main/Renderer/output/animation.gif)
 
 ## Features Implemented
 - [x] OBJ geometry and material file loading
